@@ -665,8 +665,9 @@ class COCOanalyze:
         Use the corrected detections to recompute performance of algorithm.
         Visualize results and plot precision recall curves if required by input variables.
         '''
-        indx_list = [0,1,3,4,6,7,9,10,12,13,15,16,18,19,21,22,24,25,
-                     27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49]
+        # indx_list = [0,1,3,4,6,7,9,10,12,13,15,16,18,19,21,22,24,25,
+        #              27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49]
+        indx_list = [i for i in xrange(self.num_kpts*3) if (i-2)%3 != 0]
 
         # set the error_types
         err_types = self.params.err_types
@@ -966,8 +967,6 @@ class Params:
              u'right_knee', u'left_knee',
              u'right_ankle', u'left_ankle']
         self.num_kpts = len(self.kpts_name)
-
-        self.inv_idx_dict = {i:self.inv_kpts_name.index(self.kpts_name[i]) for i in xrange(self.num_kpts)}
         self.inv_idx      = [  self.inv_kpts_name.index(self.kpts_name[i]) for i in xrange(self.num_kpts)]
 
         self.sigmas = np.array([.026,.025,.025,
