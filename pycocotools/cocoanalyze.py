@@ -44,8 +44,15 @@ class COCOanalyze:
         # store the original detections without any modification
         self._original_dts = {d['id']:d for d in copy.deepcopy(self._dts)}
 
-        # dt-gt matches
+        # dt-gt matches for keypoint error and false positive analysis
         self.matches = {}
+
+        # dt-gt matches for score error analysis
+        self.score_matches     = {}
+        self.opt_score_matches = {}
+
+        # dt-gt matches for background error analysis
+        self.false_pos_neg_matches = {}
 
         # dt with corrections
         self.corrected_dts = []
@@ -98,27 +105,76 @@ class COCOanalyze:
                 d['keypoints'] = self._original_dts[d['id']]['keypoints']
                 d['score']     = self._original_dts[d['id']]['score']
         self.corrected_dts = copy.deepcopy(self._dts)
+        # reset false negatives to empty
+        self.false_neg_gts = []
 
         # find keypoint errors in detections that are matched to ground truths
         # (localization false positives)
         if check_kpts:
             self.correct_keypoints()
+
+            # change the detections in the cocoEval object to the corrected kpts
+            for cdt in self.corrected_dts:
+                if 'opt_keypoints' not in cdt: continue
+                dtid     = cdt['id']
+                image_id = cdt['image_id']
+
+                # loop through all detections in the image and change only the
+                # corresponsing detection cdt being analyzed
+                for d in self.cocoEval._dts[image_id, self.params.catIds[0]]:
+                    if d['id'] == dtid:
+
+                        kpts_mask = np.zeros(len(cdt['good']))
+                        if 'miss' in self.params.err_types:
+                            kpts_mask += np.array(cdt['miss'])
+
+                        if 'swap' in self.params.err_types:
+                            kpts_mask += np.array(cdt['swap'])
+
+                        if 'inversion' in self.params.err_types:
+                            kpts_mask += np.array(cdt['inversion'])
+
+                        if 'jitter' in self.params.err_types:
+                            kpts_mask += np.array(cdt['jitter'])
+
+                        d['keypoints'] = \
+                            cdt['keypoints'] * (np.repeat(np.array(cdt['good']),3)==1) + \
+                            cdt['opt_keypoints'] * (np.repeat(kpts_mask,3)==1)
+
+                        break
+
         self.params.check_kpts = check_kpts
 
         # find scoring errors in all detections
         if check_scores:
             self.correct_scores()
+
+        # change the detections in the cocoEval object to the original kpts
+        for cdt in self.corrected_dts:
+            #if 'opt_keypoints' not in cdt: continue
+            dtid     = cdt['id']
+            image_id = cdt['image_id']
+
+            # loop through all detections in the image and change only the
+            # corresponsing detection cdt being analyzed
+            for d in self.cocoEval._dts[image_id, self.params.catIds[0]]:
+                if d['id'] == dtid:
+                    d['keypoints'] = cdt['keypoints']
+                    break
+
         self.params.check_scores = check_scores
 
-        # this will be dealt with with summarize() function
+        # false positive and false negatives are dealt with in summarize()
         self.params.check_false = check_false
 
     def correct_keypoints(self):
         tic = time.time()
-        print('<{}:{}>Analyzing detection errors: {}...'.format(__author__,__version__,self.params.err_types))
+        print('<{}:{}>Analyzing keypoint errors...'.format(__author__,__version__))
 
         # find all matches between dts and gts at the lowest iou thresh
-        self._find_dt_matches(self.params.oksLocThrs)
+        dtMatches, gtMatches = self._find_dt_matches(self.params.oksLocThrs)
+        self.matches['dts'] = dtMatches
+        self.matches['gts'] = gtMatches
 
         # find which errors affect the oks of detections that are matched
         corrected_dts = self._find_kpt_errors()
@@ -146,19 +202,21 @@ class COCOanalyze:
         tic = time.time()
         print('<{}:{}>Analyzing detection scores...'.format(__author__,__version__))
 
+        # find matches before changing the scores
+        dtMatches, gtMatches = self._find_dt_matches(min(self.params.oksThrs))
+        self.score_matches['dts'] = dtMatches
+        self.score_matches['gts'] = gtMatches
+
         # run the evaluation with no limit on max number of detections
         # note that for optimal score the oks thresh doesnt matter
         self.cocoEval.params.areaRng    = self.params.areaRng
         self.cocoEval.params.areaRngLbl = self.params.areaRngLbl
-        self.cocoEval.params.iouThrs    = [self.params.oksThrs[-1]]
+        self.cocoEval.params.iouThrs    = [min(self.params.oksThrs)] #[self.params.oksThrs[-1]]
         self.cocoEval.params.maxDets    = self.params.teamMaxDets
 
         # run the evaluation with check scores flag
         self.cocoEval.evaluate(check_scores=True)
-
         evalImgs = [e for e in filter(None,self.cocoEval.evalImgs)]
-        # evalImgs = [e for e in filter(None,self.cocoEval.evalImgs) if
-        #             e['aRng']==self.params.areaRng]
 
         # save the optimal scores in a temporary dictionary and
         # change the keypoints scores to the optimal value
@@ -229,8 +287,7 @@ class COCOanalyze:
                     else:
                         gtMatches[gid] = [entry]
 
-        self.matches['dts'] = dtMatches
-        self.matches['gts'] = gtMatches
+        return dtMatches, gtMatches
 
     def _find_kpt_errors(self):
         tic = time.time()
@@ -291,17 +348,30 @@ class COCOanalyze:
             # dimensions are (2n, 34), 34 for x and y coordinates of kpts
             # 2n for both the original and inverted gt vectors
             gts_kpt_mat = np.zeros((2*num_anns, 2*self.params.num_kpts))
+
+            # gts_box_mat_0 = np.zeros((2*num_anns, 2*self.params.num_kpts))
+            # gts_box_mat_1 = np.zeros((2*num_anns, 2*self.params.num_kpts))
+            # zero_mat      = np.zeros((2*num_anns, 2*self.params.num_kpts))
+            vflags        = np.zeros((2*num_anns, self.params.num_kpts))
+
             areas       = np.zeros(2*num_anns)
             indx        = 1
             for a in image_anns:
                 # get the keypoint vector and its inverted version
                 xs = np.array(a['keypoints'][0::3])
                 ys = np.array(a['keypoints'][1::3])
+                vs = np.array(a['keypoints'][2::3])
+                inv_vs = vs[self.params.inv_idx]
 
                 keypoints     = np.insert(ys, np.arange(self.params.num_kpts), xs)
                 inv_keypoints = np.insert(ys[self.params.inv_idx],
                                           np.arange(self.params.num_kpts),
                                           xs[self.params.inv_idx])
+
+                # x0 = a['bbox'][0] - a['bbox'][2]
+                # y0 = a['bbox'][1] - a['bbox'][3]
+                # x1 = a['bbox'][0] + a['bbox'][2] * 2
+                # y1 = a['bbox'][1] + a['bbox'][3] * 2
 
                 # check if it is the ground truth match, if so put at index 0 and n
                 if a['id']==gt['id']:
@@ -309,19 +379,83 @@ class COCOanalyze:
                     areas[num_anns]         = a['area']
                     gts_kpt_mat[0,:]        = keypoints
                     gts_kpt_mat[num_anns,:] = inv_keypoints
+
+                    # gts_box_mat_0[0,0::2] = x0
+                    # gts_box_mat_0[0,1::2] = y0
+                    # gts_box_mat_1[0,0::2] = x1
+                    # gts_box_mat_1[0,1::2] = y1
+                    # gts_box_mat_0[num_anns,0::2] = x0
+                    # gts_box_mat_0[num_anns,1::2] = y0
+                    # gts_box_mat_1[num_anns,0::2] = x1
+                    # gts_box_mat_1[num_anns,1::2] = y1
+
+                    vflags[0,:]        = vs
+                    vflags[num_anns,:] = inv_vs
+
                 else:
                     areas[indx]                  = a['area']
                     areas[indx+num_anns]         = a['area']
                     gts_kpt_mat[indx,:]          = keypoints
                     gts_kpt_mat[indx+num_anns,:] = inv_keypoints
+
+                    # gts_box_mat_0[indx,0::2] = x0
+                    # gts_box_mat_0[indx,1::2] = y0
+                    # gts_box_mat_1[indx,0::2] = x1
+                    # gts_box_mat_1[indx,1::2] = y1
+                    # gts_box_mat_0[indx+num_anns,0::2] = x0
+                    # gts_box_mat_0[indx+num_anns,1::2] = y0
+                    # gts_box_mat_1[indx+num_anns,0::2] = x1
+                    # gts_box_mat_1[indx+num_anns,1::2] = y1
+
+                    vflags[indx,:]          = vs
+                    vflags[indx+num_anns,:] = inv_vs
+
                     indx += 1
 
-            # compute OKS of every individual dt keypoint with corresponding gt
-            sqrd_dist = np.add.reduceat(np.square(gts_kpt_mat - dt_kpt_arr), range(0,2*self.params.num_kpts,2),axis=1)
-            oks_mat   = np.exp( -sqrd_dist / (2*(areas[:,np.newaxis]+np.spacing(1))*(self.params.sigmas**2)) )
+            # xy0_xyd = np.maximum(gts_box_mat_0-dt_kpt_arr,zero_mat)
+            # xyd_xy1 = np.maximum(dt_kpt_arr-gts_box_mat_1,zero_mat)
+            # no_kpts_dist = xy0_xyd + xyd_xy1
 
-            oks_max    = np.amax(oks_mat,axis=0)
-            oks_argmax = np.argmax(oks_mat,axis=0)
+            # compute OKS of every individual dt keypoint with corresponding gt
+            # dist = (gts_kpt_mat - dt_kpt_arr) * (np.repeat(vflags,2,axis=1) > 0) + \
+            #         no_kpts_dist              * (np.repeat(vflags,2,axis=1) ==0)
+            dist = gts_kpt_mat - dt_kpt_arr
+            sqrd_dist = np.add.reduceat(np.square(dist), range(0,2*self.params.num_kpts,2),axis=1)
+
+            # if did == 24029:
+            #     print vflags[0,:]
+            #     print
+            #     print dt_kpt_arr
+            #     print
+            #     print gts_kpt_mat[0,:]
+            #     print
+            #     print gts_kpt_mat
+            #     print
+            #     print dist
+
+            kpts_oks_mat = np.exp( -sqrd_dist / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 ) * (vflags>0) +\
+                           -1 * (vflags==0)
+
+            # sqrd_dist_2    = np.add.reduceat(np.square(dist_2), range(0,2*self.params.num_kpts,2),axis=1)
+            # log_oks_mat_2  = sqrd_dist_2 / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2
+            # kpts_oks_mat_2 = np.exp( -sqrd_dist_2 / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 )
+
+            div = np.sum(vflags>0,axis=1)
+            div[div==0] = self.params.num_kpts
+
+            # oks_mat_flag_0 = np.sum(kpts_oks_mat,axis=1)            / div
+            # oks_mat_flag_1 = np.sum(kpts_oks_mat*(vflags>0),axis=1) / div
+            # oks_mat = oks_mat_flag_0 * (np.sum(vflags>0,axis=1)==0) + oks_mat_flag_1 * (np.sum(vflags>0,axis=1)>0)
+            oks_mat = (np.sum(kpts_oks_mat * (vflags>0), axis=1) / div) * ( np.sum(vflags>0,axis=1) > 0 ) + \
+                       -1 * ( np.sum(vflags>0,axis=1) == 0 )
+            assert(np.isclose(oks_mat[0],dtm['oks'],atol=1e-08))
+
+            # NOTE: if a 0 or a -1 appear in the oks_max array it doesn't matter
+            # since that will automatically become a miss
+            oks_max    = np.amax(kpts_oks_mat,axis=0)
+            assert(np.all(vflags[:,np.where(oks_max<0)]==0))
+            oks_max[np.where(oks_max<0)] = 0
+            oks_argmax = np.argmax(kpts_oks_mat,axis=0)
 
             # good keypoints are those that have oks max > 0.85 and argmax 0
             good_kpts = np.logical_and.reduce((oks_max > self.params.jitterOksThrs[1],
@@ -345,6 +479,20 @@ class COCOanalyze:
             miss_kpts  = np.logical_and(oks_max < self.params.jitterOksThrs[0],
                                         gt_kpt_v != 0)*1
 
+            # if did == 24029:
+            #     print oks_mat
+            #     print
+            #     print kpts_oks_mat
+            #     print
+            #     print oks_max
+            #     print oks_argmax
+            #     print
+            #     print good_kpts
+            #     print jitt_kpts
+            #     print inv_kpts
+            #     print swap_kpts
+            #     print miss_kpts
+
             # compute what it means in terms of pixels to be at a certain oks score
             # for simplicity it's computed only along one dimension and added only to x
             dist_to_oks_low  = np.sqrt(-np.log(self.params.jitterOksThrs[0])*2*gt['area']*(self.params.sigmas**2))
@@ -352,15 +500,17 @@ class COCOanalyze:
             # note that for swaps we use the current ground truth match area because we
             # have to translate the oks to the scale of correct ground truth
             # round oks values to deal with numerical instabilities
-            round_oks_max   = oks_max + np.spacing(1)*(oks_max==0) -np.spacing(1)*(oks_max==1)
+            round_oks_max   = oks_max + np.spacing(1)*(oks_max==0) - np.spacing(1)*(oks_max==1)
+
             dist_to_oks_max = np.sqrt(-np.log(round_oks_max)*2*gt['area']*(self.params.sigmas**2))
 
             # correct keypoints vectors using info from all the flag vectors
             correct_kpts_x = dt_kpt_x * good_kpts + \
-                            (gt_kpt_x + dist_to_oks_high)  * jitt_kpts + \
+                            (gt_kpt_x + dist_to_oks_high) * jitt_kpts + \
                             (gt_kpt_x + dist_to_oks_low)  * miss_kpts + \
                              dt_kpt_x * (gt_kpt_v == 0) + \
-                            (gt_kpt_x + dist_to_oks_max) * inv_kpts  + (gt_kpt_x + dist_to_oks_max) * swap_kpts
+                            (gt_kpt_x + dist_to_oks_max) * inv_kpts  + \
+                            (gt_kpt_x + dist_to_oks_max) * swap_kpts
 
             correct_kpts_y = dt_kpt_y * good_kpts + \
                              gt_kpt_y * jitt_kpts + \
@@ -368,7 +518,7 @@ class COCOanalyze:
                              dt_kpt_y * (gt_kpt_v == 0) + \
                              gt_kpt_y * inv_kpts  + gt_kpt_y * swap_kpts
 
-            correct_kpts   = np.zeros(self.params.num_kpts*3).tolist()
+            correct_kpts       = np.zeros(self.params.num_kpts*3).tolist()
             correct_kpts[0::3] = correct_kpts_x.tolist()
             correct_kpts[1::3] = correct_kpts_y.tolist()
             correct_kpts[2::3] = dt_kpt_v
@@ -410,9 +560,12 @@ class COCOanalyze:
 
         # compute all the precision recall curves and return precise breakdown of
         # all error type in terms of keypoint, scoring, false positives and negatives
+        ps_mat = self._summarize_baseline()
 
         # summarize keypoint errors
-        ps_mat = self._summarize_kpt_errors()
+        if self.params.check_kpts and self.params.err_types:
+            ps_mat_kpt_errors = self._summarize_kpt_errors()
+            ps_mat = np.append(ps_mat,ps_mat_kpt_errors,axis=0)
 
         # summarize scoring errors
         if self.params.check_scores:
@@ -437,8 +590,21 @@ class COCOanalyze:
             err_labels = []
             colors_vec = []
             if self.params.check_kpts:
-                err_labels += ['Miss',    'Swap',    'Inv.',    'Jit.']
-                colors_vec += ['#F2E394', '#F2AE72', '#D96459', '#8C4646']
+                for err in self.params.err_types:
+                    if err == 'miss':
+                        err_labels.append('Miss')
+                        colors_vec.append('#F2E394')
+                    if err == 'swap':
+                        err_labels.append('Swap')
+                        colors_vec.append('#F2AE72')
+                    if err == 'inversion':
+                        err_labels.append('Inv.')
+                        colors_vec.append('#D96459')
+                    if err == 'jitter':
+                        err_labels.append('Jit.')
+                        colors_vec.append('#8C4646')
+                # err_labels += ['Miss',    'Swap',    'Inv.',    'Jit.']
+                # colors_vec += ['#F2E394', '#F2AE72', '#D96459', '#8C4646']
 
             if self.params.check_scores:
                 err_labels += ['Score']
@@ -450,34 +616,27 @@ class COCOanalyze:
 
             self._plot(recalls, ps_mat, params, err_labels, colors_vec, savedir, team_name)
 
-    def _summarize_kpt_errors(self):
+    def _summarize_baseline(self):
         '''
-        Use the corrected detections to recompute performance of algorithm.
-        Visualize results and plot precision recall curves if required by input variables.
+        Run the evaluation on the original detections to get the baseline for
+        algorithm performance that will be compared to corrected detections.
         '''
-        indx_list = [0,1,3,4,6,7,9,10,12,13,15,16,18,19,21,22,24,25,27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49]
-        # get parameters from COCOeval
+        # get parameters
         evalParams = self.cocoEval.params
-
-        # add the localization limit for the oks thresholds being analyzed
-        oksThrs = sorted(self.params.oksThrs)
-
-        # set the error_types
-        err_types = self.params.err_types
+        oksThrs    = sorted(self.params.oksThrs)
 
         # define the precision matrix that will contain all results
-        num_slices = len(oksThrs) + len(err_types)
-        counts = [num_slices,
+        counts = [len(oksThrs),
                   len(evalParams.recThrs),
                   len(evalParams.catIds),
                   len(evalParams.areaRng),
                   len(evalParams.maxDets)]
         ps = np.zeros(counts)
 
-        # set area range and the oks thresholds given in input and at 0.1 limit
+        # set area range and the oks thresholds
         self.cocoEval.params.areaRng    = self.params.areaRng
         self.cocoEval.params.areaRngLbl = self.params.areaRngLbl
-        self.cocoEval.params.iouThrs = oksThrs
+        self.cocoEval.params.iouThrs    = oksThrs
 
         # evaluate
         self.cocoEval.evaluate()
@@ -485,8 +644,7 @@ class COCOanalyze:
         self.cocoEval.summarize(verbose=True)
 
         # insert results into the precision matrix
-        slice_pos = len(oksThrs)
-        ps[:slice_pos,:,:,:,:]  = self.cocoEval.eval['precision'][::-1,:,:,:,:]
+        ps[:,:,:,:,:]  = self.cocoEval.eval['precision'][::-1,:,:,:,:]
 
         # add the stats to the stats list
         for oind, oks in enumerate(oksThrs):
@@ -495,22 +653,46 @@ class COCOanalyze:
             pind = oind
             oks_idx_skip = 3 if len(oksThrs) > 1 else 0
             rind = len(oksThrs) + oks_idx_skip + oind
-            stat['auc']    = self.cocoEval.stats[pind]
-            stat['recall'] = self.cocoEval.stats[rind]
+            stat['auc']     = self.cocoEval.stats[pind]
+            stat['recall']  = self.cocoEval.stats[rind]
             stat['areaRng'] = self.params.areaRngLbl[0]
             self.stats.append(stat)
 
-        if not self.params.check_kpts:
-            # if the keypoints should not be corrected then duplicate the last
-            # slice of the ps_matrix to the smallest value of oks and return
-            ps = ps[:slice_pos,:,:,:,:]
-            return ps
+        return ps
+
+    def _summarize_kpt_errors(self):
+        '''
+        Use the corrected detections to recompute performance of algorithm.
+        Visualize results and plot precision recall curves if required by input variables.
+        '''
+        indx_list = [0,1,3,4,6,7,9,10,12,13,15,16,18,19,21,22,24,25,
+                     27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49]
+
+        # set the error_types
+        err_types = self.params.err_types
+        assert(len(err_types)>0)
+
+        # get evaluation params
+        evalParams = self.cocoEval.params
+
+        # define the precision matrix that will contain all results
+        counts = [len(err_types),
+                  len(evalParams.recThrs),
+                  len(evalParams.catIds),
+                  len(evalParams.areaRng),
+                  len(evalParams.maxDets)]
+        ps = np.zeros(counts)
+
+        # set area range and the oks thresholds
+        self.cocoEval.params.areaRng    = self.params.areaRng
+        self.cocoEval.params.areaRngLbl = self.params.areaRngLbl
 
         # set the oks thresh to the smallest value of oks thresh
+        oksThrs = sorted(self.params.oksThrs)
         self.cocoEval.params.iouThrs = [min(oksThrs)]
 
         # compute performance after solving for each error type
-        for i,err in enumerate(err_types):
+        for eind,err in enumerate(err_types):
             print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,err))
 
             # correct
@@ -526,11 +708,12 @@ class COCOanalyze:
 
                     corrected_kpts = np.array(cdt['opt_keypoints'])
 
-                    for d in self.cocoEval._dts[image_id, evalParams.catIds[0]]:
+                    for d in self.cocoEval._dts[image_id, self.params.catIds[0]]:
                         if d['id'] == dtid:
                             keys = np.delete(np.array(d['keypoints']), slice(2, None, 3)) * \
                                    np.repeat(np.logical_not(cdt[err])*1,2) + \
-                                   np.delete(np.array(corrected_kpts), slice(2, None, 3)) * np.repeat(cdt[err],2)
+                                   np.delete(np.array(corrected_kpts), slice(2, None, 3)) * \
+                                   np.repeat(cdt[err],2)
 
                             d['keypoints'] = np.array(d['keypoints'])
                             d['keypoints'][indx_list] = keys
@@ -544,16 +727,15 @@ class COCOanalyze:
             self.cocoEval.summarize(verbose=True)
 
             stat = {}
-            stat['oks'] = self.cocoEval.params.iouThrs[0]
-            stat['err'] = err
-            stat['auc'] = self.cocoEval.stats[0]
-            stat['recall']    = self.cocoEval.stats[1]
+            stat['oks']     = self.cocoEval.params.iouThrs[0]
+            stat['err']     = err
+            stat['auc']     = self.cocoEval.stats[0]
+            stat['recall']  = self.cocoEval.stats[1]
             stat['areaRng'] = self.params.areaRngLbl[0]
             self.stats.append(stat)
 
             # store
-            ps[slice_pos,:,:,:,:]  = self.cocoEval.eval['precision'][0,:,:,:,:]
-            slice_pos += 1
+            ps[eind,:,:,:,:] = self.cocoEval.eval['precision'][0,:,:,:,:]
 
         return ps
 
@@ -562,10 +744,6 @@ class COCOanalyze:
         Use the corrected detections to recompute performance of algorithm.
         Visualize results and plot precision recall curves if required by input variables.
         '''
-        # get parameters from COCOeval
-        evalParams = self.cocoEval.params
-        oksThrs = sorted(self.params.oksThrs)
-
         # load corrected detections and rerun evaluation
         err = "score"
         print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,err))
@@ -573,24 +751,28 @@ class COCOanalyze:
             dtid     = cdt['id']
             image_id = cdt['image_id']
 
-            for d in self.cocoEval._dts[image_id, evalParams.catIds[0]]:
+            for d in self.cocoEval._dts[image_id, self.params.catIds[0]]:
                 if d['id'] == dtid:
                     d['score'] = cdt['opt_score']
                     break
 
+        dtMatches, gtMatches = self._find_dt_matches(min(self.params.oksThrs))
+        self.opt_score_matches['dts'] = dtMatches
+        self.opt_score_matches['gts'] = gtMatches
+
         # set area range and the oks thresh to last value of input array
         self.cocoEval.params.areaRng    = self.params.areaRng
         self.cocoEval.params.areaRngLbl = self.params.areaRngLbl
-        self.cocoEval.params.iouThrs = [min(oksThrs)]
+        self.cocoEval.params.iouThrs    = [min(self.params.oksThrs)]
         self.cocoEval.evaluate()
         self.cocoEval.accumulate()
         self.cocoEval.summarize(verbose=True)
 
         stat = {}
-        stat['oks'] = self.cocoEval.params.iouThrs[0]
-        stat['err'] = 'score'
-        stat['auc'] = self.cocoEval.stats[0]
-        stat['recall']    = self.cocoEval.stats[1]
+        stat['oks']     = self.cocoEval.params.iouThrs[0]
+        stat['err']     = 'score'
+        stat['auc']     = self.cocoEval.stats[0]
+        stat['recall']  = self.cocoEval.stats[1]
         stat['areaRng'] = self.params.areaRngLbl[0]
         self.stats.append(stat)
 
@@ -600,35 +782,35 @@ class COCOanalyze:
         err = "bkg. fp, fn"
         print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,err))
         # compute matches with current value of detections to determine new matches
-        self._find_dt_matches(min(self.params.oksThrs))
-        # print "Number of dts matched: [%d/%d]"%(len(self.matches['dts']),len(self._dts))
-        # print "Number of gts matched: [%d/%d]"%(len(self.matches['gts']),len(self._gts))
+        dtMatches, gtMatches = self._find_dt_matches(min(self.params.oksThrs))
+        self.false_pos_neg_matches['dts'] = dtMatches
+        self.false_pos_neg_matches['gts'] = gtMatches
 
         # assert that detection and ground truth matches are consistent
-        for d in self.matches['dts']:
+        for d in dtMatches:
             # assert that every detection matched has a corresponding gt in the gt matches dictionary
-            assert(self.matches['dts'][d][0]['gtId'] in self.matches['gts'])
+            assert(dtMatches[d][0]['gtId'] in gtMatches)
             # assert that this detection is in the dt matches of the gt it is matched to
-            assert(d in [dt['dtId'] for dt in self.matches['gts'][self.matches['dts'][d][0]['gtId']]])
+            assert(d in [dt['dtId'] for dt in gtMatches[dtMatches[d][0]['gtId']]])
 
         # assert that all ground truth with multiple detection matches should be ignored
         count = 0
-        for g in self.matches['gts']:
-            count+= len(self.matches['gts'][g])
-            if len(self.matches['gts'][g])>1:
+        for g in gtMatches:
+            count+= len(gtMatches[g])
+            if len(gtMatches[g])>1:
                 # if this gt already has multiple matches assert it is a crowd
                 # since crowd gt can be matched to multiple detections
                 assert(self.cocoGt.anns[g]['iscrowd']==1)
-            assert(self.matches['gts'][g][0]['dtId'] in self.matches['dts'])
-        assert(count==len(self.matches['dts']))
+            assert(gtMatches[g][0]['dtId'] in dtMatches)
+        assert(count==len(dtMatches))
 
         # store info about false positives in corrected detections
-        false_pos = set([dt['id'] for dt in self._dts if dt['id'] not in self.matches['dts']])
+        false_pos = set([dt['id'] for dt in self._dts if dt['id'] not in dtMatches])
         for cdt in self.corrected_dts:
             cdt['false_pos'] = True if cdt['id'] in false_pos else False
 
         # store info about false negatives in corrected ground truths
-        false_neg = set([gt for gt in self.cocoGt.getAnnIds() if gt not in self.matches['gts']])
+        false_neg = set([gt for gt in self.cocoGt.getAnnIds() if gt not in gtMatches])
         for gt in self._gts:
             if gt['id'] in false_neg:
                 self.false_neg_gts.append(gt)
@@ -649,10 +831,10 @@ class COCOanalyze:
         ps_mat_false_pos = self.cocoEval.eval['precision']
 
         stat = {}
-        stat['oks'] = self.cocoEval.params.iouThrs[0]
-        stat['err'] = 'bkg_false_pos'
-        stat['auc'] = self.cocoEval.stats[0]
-        stat['recall']    = self.cocoEval.stats[1]
+        stat['oks']     = self.cocoEval.params.iouThrs[0]
+        stat['err']     = 'bkg_false_pos'
+        stat['auc']     = self.cocoEval.stats[0]
+        stat['recall']  = self.cocoEval.stats[1]
         stat['areaRng'] = self.params.areaRngLbl[0]
         self.stats.append(stat)
 
@@ -669,10 +851,10 @@ class COCOanalyze:
         ps_mat_false_neg = self.cocoEval.eval['precision']
 
         stat = {}
-        stat['oks'] = self.cocoEval.params.iouThrs[0]
-        stat['err'] = 'false_neg'
-        stat['auc'] = self.cocoEval.stats[0]
-        stat['recall']    = self.cocoEval.stats[1]
+        stat['oks']     = self.cocoEval.params.iouThrs[0]
+        stat['err']     = 'false_neg'
+        stat['auc']     = self.cocoEval.stats[0]
+        stat['recall']  = self.cocoEval.stats[1]
         stat['areaRng'] = self.params.areaRngLbl[0]
         self.stats.append(stat)
 
@@ -798,7 +980,7 @@ class Params:
                                      .089,.089])
 
         # np.arange causes trouble.  the data point on arange is slightly larger than the true value
-        self.oksThrs = np.linspace(.5, 0.95, np.round((0.95 - .5) / .05) + 1, endpoint=True)
+        self.oksThrs = np.array([ 0.5 ,  0.55,  0.6 ,  0.65,  0.7 ,  0.75,  0.8 ,  0.85,  0.9 ,  0.95])
         # the threshold that determines the limit for localization error
         self.oksLocThrs = .1
         # oks thresholds that define a jitter error

@@ -83,7 +83,6 @@ class COCOeval:
             self.params.imgIds = sorted(cocoGt.getImgIds())
             self.params.catIds = sorted(cocoGt.getCatIds())
 
-
     def _prepare(self):
         '''
         Prepare ._gts and ._dts for evaluation based on params
@@ -217,6 +216,7 @@ class COCOeval:
         sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62,.62, 1.07, 1.07, .87, .87, .89, .89])/10.0
         vars = (sigmas * 2)**2
         k = len(sigmas)
+
         # compute oks between each detection and ground truth object
         for j, gt in enumerate(gts):
             # create bounds for ignore regions(double the gt bbox)
@@ -264,6 +264,11 @@ class COCOeval:
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
+
+            # allow to set any gtId to be ignored
+            if p.useGtIgnore == 1:
+                if g['id'] in p.gtIgnoreIds:
+                    g['_ignore'] = 1
 
         # sort dt highest score first, sort gt ignore last
         gtind = np.argsort([g['_ignore'] for g in gt], kind='mergesort')
@@ -411,6 +416,11 @@ class COCOeval:
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
+
+            # allow to set any gtId to be ignored
+            if p.useGtIgnore == 1:
+                if g['id'] in p.gtIgnoreIds:
+                    g['_ignore'] = 1
 
         # sort dt highest score first, sort gt ignore last
         gtind = np.argsort([g['_ignore'] for g in gt], kind='mergesort')
@@ -876,6 +886,9 @@ class Params:
         self.areaRng = [[0 ** 2, 1e5 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
         self.areaRngLbl = ['all', 'medium', 'large']
         self.useCats = 1
+        # use gt ignores flag to discard any gt_id from evaluation
+        self.useGtIgnore = 0
+        self.gtIgnoreIds = set()
 
     def __init__(self, iouType='segm'):
         if iouType == 'segm' or iouType == 'bbox':
