@@ -98,7 +98,7 @@ class COCOanalyze:
             self._plot(recalls=recalls,ps_mat=ps_mat,params=self.cocoEval.params,
                        savedir=savedir,team_name=team_name)
 
-    def analyze(self, check_kpts=True, check_scores=True, check_false=True):
+    def analyze(self, check_kpts=True, check_scores=True, check_bkgd=True):
         if self.corrected_dts:
             # reset dts to the original dts so the same study can be repeated
             for d in self._dts:
@@ -165,7 +165,7 @@ class COCOanalyze:
         self.params.check_scores = check_scores
 
         # false positive and false negatives are dealt with in summarize()
-        self.params.check_false = check_false
+        self.params.check_bkgd = check_bkgd
 
     def correct_keypoints(self):
         tic = time.time()
@@ -458,25 +458,25 @@ class COCOanalyze:
             oks_argmax = np.argmax(kpts_oks_mat,axis=0)
 
             # good keypoints are those that have oks max > 0.85 and argmax 0
-            good_kpts = np.logical_and.reduce((oks_max > self.params.jitterOksThrs[1],
+            good_kpts = np.logical_and.reduce((oks_max > self.params.jitterKsThrs[1],
                                                oks_argmax == 0, gt_kpt_v != 0))*1
 
             # jitter keypoints have  0.5 <= oksm < 0.85 and oks_argmax == 0
-            jitt_kpts = np.logical_and.reduce((oks_max >= self.params.jitterOksThrs[0],
-                                               oks_max <  self.params.jitterOksThrs[1], oks_argmax == 0))
+            jitt_kpts = np.logical_and.reduce((oks_max >= self.params.jitterKsThrs[0],
+                                               oks_max <  self.params.jitterKsThrs[1], oks_argmax == 0))
             jitt_kpts = np.logical_and(jitt_kpts, gt_kpt_v != 0)*1
 
             # inverted keypoints are those that have oks => 0.5 but on the inverted keypoint entry
-            inv_kpts   = np.logical_and.reduce((oks_max >= self.params.jitterOksThrs[0],
+            inv_kpts   = np.logical_and.reduce((oks_max >= self.params.jitterKsThrs[0],
                                                 oks_argmax == num_anns, gt_kpt_v != 0))*1
 
             # swapped keypoints are those that have oks => 0.5 but on keypoint of other person
-            swap_kpts  = np.logical_and.reduce((oks_max >= self.params.jitterOksThrs[0],
+            swap_kpts  = np.logical_and.reduce((oks_max >= self.params.jitterKsThrs[0],
                                                 oks_argmax != 0, oks_argmax != num_anns))
             swap_kpts  = np.logical_and(swap_kpts, gt_kpt_v != 0)*1
 
             # missed keypoints are those that have oks max < 0.5
-            miss_kpts  = np.logical_and(oks_max < self.params.jitterOksThrs[0],
+            miss_kpts  = np.logical_and(oks_max < self.params.jitterKsThrs[0],
                                         gt_kpt_v != 0)*1
 
             # if did == 24029:
@@ -495,8 +495,8 @@ class COCOanalyze:
 
             # compute what it means in terms of pixels to be at a certain oks score
             # for simplicity it's computed only along one dimension and added only to x
-            dist_to_oks_low  = np.sqrt(-np.log(self.params.jitterOksThrs[0])*2*gt['area']*(self.params.sigmas**2))
-            dist_to_oks_high = np.sqrt(-np.log(self.params.jitterOksThrs[1])*2*gt['area']*(self.params.sigmas**2))
+            dist_to_oks_low  = np.sqrt(-np.log(self.params.jitterKsThrs[0])*2*gt['area']*(self.params.sigmas**2))
+            dist_to_oks_high = np.sqrt(-np.log(self.params.jitterKsThrs[1])*2*gt['area']*(self.params.sigmas**2))
             # note that for swaps we use the current ground truth match area because we
             # have to translate the oks to the scale of correct ground truth
             # round oks values to deal with numerical instabilities
@@ -575,7 +575,7 @@ class COCOanalyze:
 
         # summarize detections that are unmatched (hallucinated false positives)
         # and ground truths that are unmatched (false negatives)
-        if self.params.check_false:
+        if self.params.check_bkgd:
             ps_mat_false_errors = self._summarize_false_errors()
             ps_mat = np.append(ps_mat,ps_mat_false_errors,axis=0)
 
@@ -610,7 +610,7 @@ class COCOanalyze:
                 err_labels += ['Score']
                 colors_vec += ['#4F82BD']
 
-            if self.params.check_false:
+            if self.params.check_bkgd:
                 err_labels += ['Bkg.',   'FN']
                 colors_vec += ['#8063A3','seagreen']
 
@@ -667,7 +667,7 @@ class COCOanalyze:
         '''
         # indx_list = [0,1,3,4,6,7,9,10,12,13,15,16,18,19,21,22,24,25,
         #              27,28,30,31,33,34,36,37,39,40,42,43,45,46,48,49]
-        indx_list = [i for i in xrange(self.num_kpts*3) if (i-2)%3 != 0]
+        indx_list = [i for i in xrange(self.params.num_kpts*3) if (i-2)%3 != 0]
 
         # set the error_types
         err_types = self.params.err_types
@@ -983,7 +983,7 @@ class Params:
         # the threshold that determines the limit for localization error
         self.oksLocThrs = .1
         # oks thresholds that define a jitter error
-        self.jitterOksThrs = [.5,.85]
+        self.jitterKsThrs = [.5,.85]
 
         self.maxDets     = [20]
         self.teamMaxDets = []
@@ -994,7 +994,7 @@ class Params:
         self.err_types = ['miss','swap','inversion','jitter']
         self.check_kpts   = True
         self.check_scores = True
-        self.check_false  = True
+        self.check_bkgd  = True
 
     def __init__(self, iouType='keypoints'):
         if iouType == 'keypoints':
