@@ -292,17 +292,11 @@ class COCOanalyze:
     def _find_kpt_errors(self):
         tic = time.time()
         print "Finding all errors causing false positives..."
-
         zero_kpt_gts  = 0
-        # count         = 0
-        # tot           = len(self.matches['dts'])
-
         corrected_dts = []
 
         # this contains all the detections that have been matched with a gt
         for did in self.matches['dts']:
-            # count += 1
-            # if (count % 10000 == 0): print " - Analyzed: %d/%d"%(count,tot)
 
             '''
             # get the info on the [dt,gt] match
@@ -348,14 +342,10 @@ class COCOanalyze:
             # dimensions are (2n, 34), 34 for x and y coordinates of kpts
             # 2n for both the original and inverted gt vectors
             gts_kpt_mat = np.zeros((2*num_anns, 2*self.params.num_kpts))
-
-            # gts_box_mat_0 = np.zeros((2*num_anns, 2*self.params.num_kpts))
-            # gts_box_mat_1 = np.zeros((2*num_anns, 2*self.params.num_kpts))
-            # zero_mat      = np.zeros((2*num_anns, 2*self.params.num_kpts))
-            vflags        = np.zeros((2*num_anns, self.params.num_kpts))
-
+            vflags      = np.zeros((2*num_anns, self.params.num_kpts))
             areas       = np.zeros(2*num_anns)
             indx        = 1
+
             for a in image_anns:
                 # get the keypoint vector and its inverted version
                 xs = np.array(a['keypoints'][0::3])
@@ -368,26 +358,12 @@ class COCOanalyze:
                                           np.arange(self.params.num_kpts),
                                           xs[self.params.inv_idx])
 
-                # x0 = a['bbox'][0] - a['bbox'][2]
-                # y0 = a['bbox'][1] - a['bbox'][3]
-                # x1 = a['bbox'][0] + a['bbox'][2] * 2
-                # y1 = a['bbox'][1] + a['bbox'][3] * 2
-
                 # check if it is the ground truth match, if so put at index 0 and n
                 if a['id']==gt['id']:
                     areas[0]                = a['area']
                     areas[num_anns]         = a['area']
                     gts_kpt_mat[0,:]        = keypoints
                     gts_kpt_mat[num_anns,:] = inv_keypoints
-
-                    # gts_box_mat_0[0,0::2] = x0
-                    # gts_box_mat_0[0,1::2] = y0
-                    # gts_box_mat_1[0,0::2] = x1
-                    # gts_box_mat_1[0,1::2] = y1
-                    # gts_box_mat_0[num_anns,0::2] = x0
-                    # gts_box_mat_0[num_anns,1::2] = y0
-                    # gts_box_mat_1[num_anns,0::2] = x1
-                    # gts_box_mat_1[num_anns,1::2] = y1
 
                     vflags[0,:]        = vs
                     vflags[num_anns,:] = inv_vs
@@ -398,54 +374,22 @@ class COCOanalyze:
                     gts_kpt_mat[indx,:]          = keypoints
                     gts_kpt_mat[indx+num_anns,:] = inv_keypoints
 
-                    # gts_box_mat_0[indx,0::2] = x0
-                    # gts_box_mat_0[indx,1::2] = y0
-                    # gts_box_mat_1[indx,0::2] = x1
-                    # gts_box_mat_1[indx,1::2] = y1
-                    # gts_box_mat_0[indx+num_anns,0::2] = x0
-                    # gts_box_mat_0[indx+num_anns,1::2] = y0
-                    # gts_box_mat_1[indx+num_anns,0::2] = x1
-                    # gts_box_mat_1[indx+num_anns,1::2] = y1
-
                     vflags[indx,:]          = vs
                     vflags[indx+num_anns,:] = inv_vs
 
                     indx += 1
 
-            # xy0_xyd = np.maximum(gts_box_mat_0-dt_kpt_arr,zero_mat)
-            # xyd_xy1 = np.maximum(dt_kpt_arr-gts_box_mat_1,zero_mat)
-            # no_kpts_dist = xy0_xyd + xyd_xy1
-
             # compute OKS of every individual dt keypoint with corresponding gt
-            # dist = (gts_kpt_mat - dt_kpt_arr) * (np.repeat(vflags,2,axis=1) > 0) + \
-            #         no_kpts_dist              * (np.repeat(vflags,2,axis=1) ==0)
             dist = gts_kpt_mat - dt_kpt_arr
             sqrd_dist = np.add.reduceat(np.square(dist), range(0,2*self.params.num_kpts,2),axis=1)
 
-            # if did == 24029:
-            #     print vflags[0,:]
-            #     print
-            #     print dt_kpt_arr
-            #     print
-            #     print gts_kpt_mat[0,:]
-            #     print
-            #     print gts_kpt_mat
-            #     print
-            #     print dist
 
             kpts_oks_mat = np.exp( -sqrd_dist / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 ) * (vflags>0) +\
                            -1 * (vflags==0)
 
-            # sqrd_dist_2    = np.add.reduceat(np.square(dist_2), range(0,2*self.params.num_kpts,2),axis=1)
-            # log_oks_mat_2  = sqrd_dist_2 / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2
-            # kpts_oks_mat_2 = np.exp( -sqrd_dist_2 / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 )
-
             div = np.sum(vflags>0,axis=1)
             div[div==0] = self.params.num_kpts
 
-            # oks_mat_flag_0 = np.sum(kpts_oks_mat,axis=1)            / div
-            # oks_mat_flag_1 = np.sum(kpts_oks_mat*(vflags>0),axis=1) / div
-            # oks_mat = oks_mat_flag_0 * (np.sum(vflags>0,axis=1)==0) + oks_mat_flag_1 * (np.sum(vflags>0,axis=1)>0)
             oks_mat = (np.sum(kpts_oks_mat * (vflags>0), axis=1) / div) * ( np.sum(vflags>0,axis=1) > 0 ) + \
                        -1 * ( np.sum(vflags>0,axis=1) == 0 )
             assert(np.isclose(oks_mat[0],dtm['oks'],atol=1e-08))
@@ -478,20 +422,6 @@ class COCOanalyze:
             # missed keypoints are those that have oks max < 0.5
             miss_kpts  = np.logical_and(oks_max < self.params.jitterKsThrs[0],
                                         gt_kpt_v != 0)*1
-
-            # if did == 24029:
-            #     print oks_mat
-            #     print
-            #     print kpts_oks_mat
-            #     print
-            #     print oks_max
-            #     print oks_argmax
-            #     print
-            #     print good_kpts
-            #     print jitt_kpts
-            #     print inv_kpts
-            #     print swap_kpts
-            #     print miss_kpts
 
             # compute what it means in terms of pixels to be at a certain oks score
             # for simplicity it's computed only along one dimension and added only to x
@@ -544,8 +474,6 @@ class COCOanalyze:
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        # print('[DEBUG]<{}:{}>\n - iouThrs:{}\n - maxDets:{}\n - areaRng:{}'.format(
-        # __author__,__version__,self.params.iouThrs,self.params.maxDets,self.params.areaRng))
         if not self.corrected_dts:
             raise Exception('<{}:{}>Please run analyze() first'.format(__author__,__version__))
 
