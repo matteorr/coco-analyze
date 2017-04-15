@@ -631,7 +631,7 @@ class COCOeval:
         toc = time.time()
         print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
 
-    def summarize(self, verbose=False, makeplots=False, savedir=None):
+    def summarize(self, verbose=False):
         '''
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
@@ -728,7 +728,6 @@ class COCOeval:
                 stats[cur_stat+2] = _summarize(0, maxDets=20, areaRng='medium')
                 stats[cur_stat+3] = _summarize(0, maxDets=20, areaRng='large')
 
-            if makeplots: self.plot(savedir=savedir)
             return stats
 
         if not self.eval:

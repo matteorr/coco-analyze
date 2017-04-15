@@ -1,11 +1,9 @@
-__author__  = 'mrr'
-__version__ = '2.0'
+__author__ = 'tsungyi'
 
 import numpy as np
 import datetime
 import time
 from collections import defaultdict
-from scipy.optimize import linear_sum_assignment
 from . import mask as maskUtils
 import copy
 
@@ -67,7 +65,7 @@ class COCOeval:
         :return: None
         '''
         if not iouType:
-            print('<{}:{}>iouType not specified. use default iouType segm'.format(__author__,__version__))
+            print('iouType not specified. use default iouType segm')
         self.cocoGt   = cocoGt              # ground truth COCO API
         self.cocoDt   = cocoDt              # detections COCO API
         self.params   = {}                  # evaluation parameters
@@ -82,6 +80,7 @@ class COCOeval:
         if not cocoGt is None:
             self.params.imgIds = sorted(cocoGt.getImgIds())
             self.params.catIds = sorted(cocoGt.getCatIds())
+
 
     def _prepare(self):
         '''
@@ -120,28 +119,19 @@ class COCOeval:
         self.evalImgs = defaultdict(list)   # per-image per-category evaluation results
         self.eval     = {}                  # accumulated evaluation results
 
-    def evaluate(self, check_scores=False):
+    def evaluate(self):
         '''
         Run per image evaluation on given images and store results (a list of dict) in self.evalImgs
         :return: None
         '''
         tic = time.time()
-        if check_scores:
-            print('<{}:{}>Running per image *optimal score* evaluation...'.format(__author__,__version__))
-        else:
-            print('<{}:{}>Running per image evaluation...'.format(__author__,__version__))
-
+        print('Running per image evaluation...')
         p = self.params
         # add backward compatibility if useSegm is specified in params
         if not p.useSegm is None:
             p.iouType = 'segm' if p.useSegm == 1 else 'bbox'
-            print('<{}:{}>useSegm (deprecated) is not None. Running {} evaluation'.format(__author__,__version__,p.iouType))
-
-        # raise exception if checking scores and not using keypoints
-        if check_scores and p.iouType != 'keypoints':
-            raise Exception('<{}:{}>This function works only for *keypoints* eval.'.format(__author__,__version__))
-
-        print('<{}:{}>Evaluate annotation type *{}*'.format(__author__,__version__,p.iouType))
+            print('useSegm (deprecated) is not None. Running {} evaluation'.format(p.iouType))
+        print('Evaluate annotation type *{}*'.format(p.iouType))
         p.imgIds = list(np.unique(p.imgIds))
         if p.useCats:
             p.catIds = list(np.unique(p.catIds))
@@ -160,7 +150,7 @@ class COCOeval:
                         for imgId in p.imgIds
                         for catId in catIds}
 
-        evaluateImg = self.evaluateImg if not check_scores else self.evaluateImgScores
+        evaluateImg = self.evaluateImg
         maxDet = p.maxDets[-1]
         self.evalImgs = [evaluateImg(imgId, catId, areaRng, maxDet)
                  for catId in catIds
@@ -169,7 +159,7 @@ class COCOeval:
              ]
         self._paramsEval = copy.deepcopy(self.params)
         toc = time.time()
-        print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc-tic))
 
     def computeIoU(self, imgId, catId):
         p = self.params
@@ -209,14 +199,13 @@ class COCOeval:
         dts = [dts[i] for i in inds]
         if len(dts) > p.maxDets[-1]:
             dts = dts[0:p.maxDets[-1]]
-
+        # if len(gts) == 0 and len(dts) == 0:
         if len(gts) == 0 or len(dts) == 0:
             return []
         ious = np.zeros((len(dts), len(gts)))
         sigmas = np.array([.26, .25, .25, .35, .35, .79, .79, .72, .72, .62,.62, 1.07, 1.07, .87, .87, .89, .89])/10.0
         vars = (sigmas * 2)**2
         k = len(sigmas)
-
         # compute oks between each detection and ground truth object
         for j, gt in enumerate(gts):
             # create bounds for ignore regions(double the gt bbox)
@@ -256,7 +245,7 @@ class COCOeval:
         else:
             gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
             dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
-        if len(gt) == 0 and len(dt) == 0:
+        if len(gt) == 0 and len(dt) ==0:
             return None
 
         for g in gt:
@@ -264,10 +253,6 @@ class COCOeval:
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
-            # allow to set any gtId to be ignored
-            if p.useGtIgnore == 1:
-                if g['id'] in p.gtIgnoreIds:
-                    g['_ignore'] = 1
 
         # sort dt highest score first, sort gt ignore last
         gtind = np.argsort([g['_ignore'] for g in gt], kind='mergesort')
@@ -283,8 +268,6 @@ class COCOeval:
         D = len(dt)
         gtm  = np.zeros((T,G))
         dtm  = np.zeros((T,D))
-        gtIous = np.zeros((T,G))
-        dtIous = np.zeros((T,D))
         gtIg = np.array([g['_ignore'] for g in gt])
         dtIg = np.zeros((T,D))
         if not len(ious)==0:
@@ -296,46 +279,25 @@ class COCOeval:
                     for gind, g in enumerate(gt):
                         # if this gt already matched, and not a crowd, continue
                         if gtm[tind,gind]>0 and not iscrowd[gind]:
-                            # this ground truth is matched to a previous detection
-                            # and is not a crowd so only 1 match allowed
-                            # continue to next gt when looking for a match
                             continue
                         # if dt matched to reg gt, and on ignore gt, stop
                         if m>-1 and gtIg[m]==0 and gtIg[gind]==1:
-                            # if the last match for this detection (stored in m)
-                            # was done with a non-ignore gt and this current gt
-                            # has ignore flag to 1 then stop looking for matches
-                            # as gts are ordered so that all the following gts are
-                            # with ignore flag == 1 and none of them can "steal"
-                            # a match from a gt with ignore flag == 0
                             break
                         # continue to next gt unless better match made
                         if ious[dind,gind] < iou:
-                            # the iou between this detection and this ground truth
-                            # is lower than a previous match or than the minimum
-                            # iou threshold considered so analyze next gt
                             continue
                         # if match successful and best so far, store appropriately
-                        # the iou between this detection and this ground truth is
-                        # the highest so far, so store this as the new match
                         iou=ious[dind,gind]
                         m=gind
                     # if match made store id of match for both dt and gt
                     if m ==-1:
-                        # looked at all the ground truths and no match was made
-                        # this detection is a false positive, look at next detection
                         continue
-
                     dtIg[tind,dind] = gtIg[m]
                     dtm[tind,dind]  = gt[m]['id']
                     gtm[tind,m]     = d['id']
-                    dtIous[tind,dind]  = iou
-                    gtIous[tind,m]     = iou
-
         # set unmatched detections outside of area range to ignore
         a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
-
         # store results for given image and category
         return {
                 'image_id':     imgId,
@@ -349,186 +311,7 @@ class COCOeval:
                 'dtScores':     [d['score'] for d in dt],
                 'gtIgnore':     gtIg,
                 'dtIgnore':     dtIg,
-                'dtIous':       dtIous,
-                'gtIous':       gtIous
             }
-
-    def evaluateImgScores(self, imgId, catId, aRng, maxDet):
-        '''
-        perform evaluation for single category and image using the optimal score
-        that maximizes the sum of oks over all the matches in the image and minimizes
-        the score for all the detections that remain unmatched.
-        :return: dict (single image results)
-        '''
-        p = self.params
-        if p.useCats:
-            gt = self._gts[imgId,catId]
-            dt = self._dts[imgId,catId]
-        else:
-            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
-            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
-        if len(gt) == 0 and len(dt) == 0:
-            return None
-
-        for g in gt:
-            if g['ignore'] or (g['area']<aRng[0] or g['area']>aRng[1]):
-                g['_ignore'] = 1
-            else:
-                g['_ignore'] = 0
-            # allow to set any gtId to be ignored
-            if p.useGtIgnore == 1:
-                if g['id'] in p.gtIgnoreIds:
-                    g['_ignore'] = 1
-
-        # sort dt highest score first, sort gt ignore last
-        gtind = np.argsort([g['_ignore'] for g in gt], kind='mergesort')
-        gt = [gt[i] for i in gtind]
-        dtind = np.argsort([-d['score'] for d in dt], kind='mergesort')
-        dt = [dt[i] for i in dtind[0:maxDet]]
-        G = len(gt)
-        D = len(dt)
-
-        iscrowd = [int(o['iscrowd']) for o in gt]
-        # load computed ious
-        ious = self.ious[imgId, catId][:, gtind] if len(self.ious[imgId, catId]) > 0 else self.ious[imgId, catId]
-
-        output_dict = self.evaluateImg(imgId, catId, aRng, maxDet)
-
-        # compute the optimal matching possible based on given keypoints
-        # the matching that maximizes the oks score of matched gts and dts
-        # is done with the hungarian algorithm
-
-        if len(dt) != 0 and len(gt) != 0:
-            # there are both detections and ground truth annotations so an
-            # optimal matching is required
-            dt_opt_m      = np.zeros(D)
-            dt_opt_ious   = np.zeros(D)
-            dt_opt_scores = np.zeros(D)
-
-            gt_opt_m    = np.zeros(G)
-            gt_opt_ious = np.zeros(G)
-
-            num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
-            if num_gt_not_ignore in [0,len(gt)]:
-                # all the ground truth annotations should be treated with same
-                # priority (ignore all or none), so the optimal matching can be
-                # done with the whole ious matrix
-
-                # dt_opt_m      = np.zeros(D)
-                # dt_opt_ious   = np.zeros(D)
-                # dt_opt_scores = -.01123*np.ones(D)#np.zeros(D)
-                #
-                # gt_opt_m    = np.zeros(G)
-                # gt_opt_ious = np.zeros(G)
-
-                # subtracting the max value since we want to maximize utility
-                # instead of minimizing cost
-                dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious) - ious)
-                assert(len(dt_opt_ind)==len(gt_opt_ind))
-
-                for i, (dtind,gtind) in enumerate(zip(dt_opt_ind,gt_opt_ind)):
-                    #print i, dtind, gtind, ious[dtind,gtind]
-                    dt_opt_m[dtind]      = gt[gtind]['id']
-                    dt_opt_ious[dtind]   = ious[dtind,gtind]
-                    dt_opt_scores[dtind] = ious[dtind,gtind]
-                    gt_opt_m[gtind]      = dt[dtind]['id']
-                    gt_opt_ious[gtind]   = ious[dtind,gtind]
-
-                dtOptMatches = [int(d) for d in dt_opt_m]
-                gtOptMatches = [int(g) for g in gt_opt_m]
-                dtOptIous    = dt_opt_ious
-                gtOptIous    = gt_opt_ious
-                dtOptScores  = dt_opt_scores.tolist()
-
-            else:
-                # some ground truth annotations have ignore flag and some don't
-                # so the optimal matching should be done first for the non ignore
-                # ground truths and then for the remaining ones
-
-                # select the portion of the ious matrix that corresponds to non
-                # ignore ground truth annotations
-                ious_mod = ious[:,:num_gt_not_ignore]
-
-                # subtracting the max value since we want to maximize utility
-                # instead of minimizing cost
-                dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
-                assert(len(dt_opt_ind)==len(gt_opt_ind))
-
-                for (dtind,gtind) in zip(dt_opt_ind,gt_opt_ind):
-                    #print dtind, gtind, ious[dtind,gtind]
-                    dt_opt_m[dtind]      = gt[gtind]['id']
-                    dt_opt_ious[dtind]   = ious_mod[dtind,gtind]
-                    dt_opt_scores[dtind] = ious_mod[dtind,gtind]
-                    gt_opt_m[gtind]      = dt[dtind]['id']
-                    gt_opt_ious[gtind]   = ious_mod[dtind,gtind]
-
-                # get the minimum score and the indxs of the detections
-                # that have not been matched to ground truths
-                unmatched_dts = [idx for idx in xrange(len(dt)) if idx not in dt_opt_ind]
-                ious_mod = ious[unmatched_dts,num_gt_not_ignore:]
-                oks_max  = np.max(ious_mod,    axis=1)
-                oks_amax = np.argmax(ious_mod, axis=1)
-
-                # ensuring that none of the remaining matches can get a score higher
-                # than any of the detections previously matched by remapping
-                # the score to an interval [0,min_score-epsilon] rather than [0,1]
-                ##min_score = np.min( dt_opt_ious[dt_opt_ious!= 0] )
-                min_score = min(enumerate(dt_opt_ious.tolist()),
-                            key=lambda x: x[1] if x[1] > 0 else float('inf'))[1]
-                max_min_score = max(min_score-np.spacing(1),0)
-                OldMin = 0; OldMax = 1
-                NewMin = 0; NewMax = max_min_score
-                OldRange = (OldMax - OldMin)
-                NewRange = (NewMax - NewMin)
-
-                for i, dtind in enumerate(unmatched_dts):
-                    oksm  = oks_max[i]
-                    gtind = oks_amax[i] + num_gt_not_ignore
-                    assert(oksm == ious[dtind,gtind])
-
-                    dt_opt_m[dtind]    = gt[gtind]['id']
-                    dt_opt_ious[dtind] = oksm
-                    gt_opt_m[gtind]    = dt[dtind]['id']
-                    gt_opt_ious[gtind] = oksm
-
-                    OldValue = oksm
-                    # if we want to discard scoring errors NewValue = 0
-                    NewValue = (((OldValue - OldMin) * NewRange) / OldRange) + NewMin
-                    dt_opt_scores[dtind] = NewValue #OldValue
-
-                dtOptMatches = [int(d) for d in dt_opt_m]
-                gtOptMatches = [int(g) for g in gt_opt_m]
-                dtOptIous    = dt_opt_ious
-                gtOptIous    = gt_opt_ious
-                dtOptScores  = dt_opt_scores.tolist()
-        else:
-            if len(dt) == 0:
-                # if there are no detections the optimal scoring cannot be computed
-                # all the ground truth annotations will be false negatives
-                dtOptMatches = []
-                gtOptMatches = []
-                dtOptIous    = []
-                gtOptIous    = []
-                dtOptScores  = []
-
-            if len(gt) == 0:
-                # there are some detections but no ground truth annotations
-                # all of these detections are hallucinated false positives
-                # optimal score is to set their confidence to 0
-                dtOptMatches = []
-                gtOptMatches = []
-                dtOptIous    = []
-                gtOptIous    = []
-                dtOptScores  = [0. for d in dt]
-
-        # extend the output dictionary with the info from the optimal matches
-        output_dict['dtOptMatches'] = dtOptMatches
-        output_dict['gtOptMatches'] = gtOptMatches
-        output_dict['dtOptIous']    = dtOptIous
-        output_dict['gtOptIous']    = gtOptIous
-        output_dict['dtOptScores']  = dtOptScores
-
-        return output_dict
 
     def accumulate(self, p = None):
         '''
@@ -536,10 +319,10 @@ class COCOeval:
         :param p: input params for evaluation
         :return: None
         '''
-        print('<{}:{}>Accumulating evaluation results...'.format(__author__,__version__))
+        print('Accumulating evaluation results...')
         tic = time.time()
         if not self.evalImgs:
-            print('<{}:{}>Please run evaluate() first'.format(__author__,__version__))
+            print('Please run evaluate() first')
         # allows input customized parameters
         if p is None:
             p = self.params
@@ -629,19 +412,15 @@ class COCOeval:
             'recall':   recall,
         }
         toc = time.time()
-        print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+        print('DONE (t={:0.2f}s).'.format( toc-tic))
 
-    def summarize(self, verbose=False, makeplots=False, savedir=None):
+    def summarize(self):
         '''
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        # print('[DEBUG]<{}:{}>\n - iouThrs:{}\n - maxDets:{}\n - areaRng:{}'.format(
-        # __author__,__version__,self.params.iouThrs,self.params.maxDets,self.params.areaRng))
-
         def _summarize( ap=1, iouThr=None, areaRng='all', maxDets=100 ):
             p = self.params
-
             iStr = ' {:<18} {} @[ IoU={:<9} | area={:>6s} | maxDets={:>3d} ] = {:0.3f}'
             titleStr = 'Average Precision' if ap == 1 else 'Average Recall'
             typeStr = '(AP)' if ap==1 else '(AR)'
@@ -655,14 +434,14 @@ class COCOeval:
                 s = self.eval['precision']
                 # IoU
                 if iouThr is not None:
-                    t = np.where(iouThr == np.array(p.iouThrs))[0]
+                    t = np.where(iouThr == p.iouThrs)[0]
                     s = s[t]
                 s = s[:,:,:,aind,mind]
             else:
                 # dimension of recall: [TxKxAxM]
                 s = self.eval['recall']
                 if iouThr is not None:
-                    t = np.where(iouThr == np.array(p.iouThrs))[0]
+                    t = np.where(iouThr == p.iouThrs)[0]
                     s = s[t]
                 s = s[:,:,aind,mind]
             if len(s[s>-1])==0:
@@ -699,45 +478,13 @@ class COCOeval:
             stats[8] = _summarize(0, maxDets=20, areaRng='medium')
             stats[9] = _summarize(0, maxDets=20, areaRng='large')
             return stats
-        def _summarizeKps_verbose():
-            # plot precision recall curves along with summarization for all thresh
-            print('<{}:{}>Verbose Summary:'.format(__author__,__version__))
-            num_stats = 2*(1 + len(self.params.iouThrs) + 2)
-            stats = np.zeros((num_stats,))
-            cur_stat = -1
-
-            # set the main area range
-            mainAreaRng = 'all' if len(self.params.areaRngLbl) > 1 else self.params.areaRngLbl[0]
-
-            for t in self.params.iouThrs:
-                cur_stat += 1
-                stats[cur_stat] = _summarize(1, maxDets=20, iouThr=t, areaRng=mainAreaRng)
-
-            if len(self.params.iouThrs) > 1:
-                stats[cur_stat+1] = _summarize(1, maxDets=20)
-                stats[cur_stat+2] = _summarize(1, maxDets=20, areaRng='medium')
-                stats[cur_stat+3] = _summarize(1, maxDets=20, areaRng='large')
-                cur_stat += 3
-
-            for t in self.params.iouThrs:
-                cur_stat += 1
-                stats[cur_stat] = _summarize(0, maxDets=20, iouThr=t, areaRng=mainAreaRng)
-
-            if len(self.params.iouThrs) > 1:
-                stats[cur_stat+1] = _summarize(0, maxDets=20)
-                stats[cur_stat+2] = _summarize(0, maxDets=20, areaRng='medium')
-                stats[cur_stat+3] = _summarize(0, maxDets=20, areaRng='large')
-
-            if makeplots: self.plot(savedir=savedir)
-            return stats
-
         if not self.eval:
-            raise Exception('<{}:{}>Please run accumulate() first'.format(__author__,__version__))
+            raise Exception('Please run accumulate() first')
         iouType = self.params.iouType
         if iouType == 'segm' or iouType == 'bbox':
             summarize = _summarizeDets
         elif iouType == 'keypoints':
-            summarize = _summarizeKps if not verbose else _summarizeKps_verbose
+            summarize = _summarizeKps
         self.stats = summarize()
 
     def __str__(self):
@@ -768,9 +515,6 @@ class Params:
         self.areaRng = [[0 ** 2, 1e5 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
         self.areaRngLbl = ['all', 'medium', 'large']
         self.useCats = 1
-        # use gt ignores flag to discard any gt_id from evaluation
-        self.useGtIgnore = 0
-        self.gtIgnoreIds = set()
 
     def __init__(self, iouType='segm'):
         if iouType == 'segm' or iouType == 'bbox':
