@@ -132,8 +132,8 @@ class COCOeval:
             print('<{}:{}>Running per image evaluation...'.format(__author__,__version__))
 
         p = self.params
+        # add backward compatibility if useSegm is specified in params
         if not p.useSegm is None:
-            # add backward compatibility if useSegm is specified in params
             p.iouType = 'segm' if p.useSegm == 1 else 'bbox'
             print('<{}:{}>useSegm (deprecated) is not None. Running {} evaluation'.format(__author__,__version__,p.iouType))
 
@@ -264,7 +264,6 @@ class COCOeval:
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
-
             # allow to set any gtId to be ignored
             if p.useGtIgnore == 1:
                 if g['id'] in p.gtIgnoreIds:
@@ -279,12 +278,6 @@ class COCOeval:
         # load computed ious
         ious = self.ious[imgId, catId][:, gtind] if len(self.ious[imgId, catId]) > 0 else self.ious[imgId, catId]
 
-        debug = False
-        #if imgId == 108 or imgId == 408:
-        #    debug = True
-
-        if debug: print ious, ious.shape
-
         T = len(p.iouThrs)
         G = len(gt)
         D = len(dt)
@@ -296,29 +289,19 @@ class COCOeval:
         dtIg = np.zeros((T,D))
         if not len(ious)==0:
             for tind, t in enumerate(p.iouThrs):
-                if debug: print "thresh index and val, ", tind, t
                 for dind, d in enumerate(dt):
-                    if debug: print "current detection, ", dind, d
                     # information about best match so far (m=-1 -> unmatched)
                     iou = min([t,1-1e-10])
                     m   = -1
-                    if debug: print "current iou and match, ", iou, m
                     for gind, g in enumerate(gt):
-                        if debug:
-                            print "current ground truth, ", gind, g
-                            print "gt match and is crowd, ", gtm[tind,gind], iscrowd[gind]
-                            print "m value and gtIgnore, ", m, gtIg[m], gtIg[gind]
-                            print "ious of dt gt, ", ious[dind,gind]
                         # if this gt already matched, and not a crowd, continue
                         if gtm[tind,gind]>0 and not iscrowd[gind]:
-                            if debug: print "gt matched and not crowd, skip gt"
                             # this ground truth is matched to a previous detection
                             # and is not a crowd so only 1 match allowed
                             # continue to next gt when looking for a match
                             continue
                         # if dt matched to reg gt, and on ignore gt, stop
                         if m>-1 and gtIg[m]==0 and gtIg[gind]==1:
-                            if debug: print "gt matched, gt ignore of match=0 and cur gt ignore =1, break to next dt"
                             # if the last match for this detection (stored in m)
                             # was done with a non-ignore gt and this current gt
                             # has ignore flag to 1 then stop looking for matches
@@ -328,7 +311,6 @@ class COCOeval:
                             break
                         # continue to next gt unless better match made
                         if ious[dind,gind] < iou:
-                            if debug: print "iou is lower than iou of match or oks thresh, skip gt"
                             # the iou between this detection and this ground truth
                             # is lower than a previous match or than the minimum
                             # iou threshold considered so analyze next gt
@@ -338,12 +320,8 @@ class COCOeval:
                         # the highest so far, so store this as the new match
                         iou=ious[dind,gind]
                         m=gind
-                        if debug:
-                            print "this gt matches dt with higher iou, updating match"
-                            print "new iou, m ", iou, m
                     # if match made store id of match for both dt and gt
                     if m ==-1:
-                        if debug: "no gt match for this dt, go to next dt"
                         # looked at all the ground truths and no match was made
                         # this detection is a false positive, look at next detection
                         continue
@@ -351,24 +329,15 @@ class COCOeval:
                     dtIg[tind,dind] = gtIg[m]
                     dtm[tind,dind]  = gt[m]['id']
                     gtm[tind,m]     = d['id']
-
                     dtIous[tind,dind]  = iou
                     gtIous[tind,m]     = iou
-
-                    if debug:
-                        print "updating dt match info"
-                        print "dt ignore ", dtIg[tind,dind]
-                        print "dt match ", dtm[tind,dind]
-                        print "gt match ", gtm[tind,m]
-                        print "dt Ious ", dtIous[tind,dind]
-                        print "gt Ious ", gtIous[tind,m]
 
         # set unmatched detections outside of area range to ignore
         a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
 
         # store results for given image and category
-        out_dict = {
+        return {
                 'image_id':     imgId,
                 'category_id':  catId,
                 'aRng':         aRng,
@@ -383,13 +352,6 @@ class COCOeval:
                 'dtIous':       dtIous,
                 'gtIous':       gtIous
             }
-
-        if debug:
-            print "================================="
-            print out_dict
-            print "================================="
-
-        return out_dict
 
     def evaluateImgScores(self, imgId, catId, aRng, maxDet):
         '''
@@ -405,18 +367,14 @@ class COCOeval:
         else:
             gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
             dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
-
-        # if this image has no detections and ground truths skip it
-        if len(gt) == 0 and len(dt) ==0:
+        if len(gt) == 0 and len(dt) == 0:
             return None
 
-        # set the gt ignore flag if a gt is outside area range or is a crowd
         for g in gt:
             if g['ignore'] or (g['area']<aRng[0] or g['area']>aRng[1]):
                 g['_ignore'] = 1
             else:
                 g['_ignore'] = 0
-
             # allow to set any gtId to be ignored
             if p.useGtIgnore == 1:
                 if g['id'] in p.gtIgnoreIds:
@@ -427,101 +385,28 @@ class COCOeval:
         gt = [gt[i] for i in gtind]
         dtind = np.argsort([-d['score'] for d in dt], kind='mergesort')
         dt = [dt[i] for i in dtind[0:maxDet]]
+        G = len(gt)
+        D = len(dt)
 
-        # set the iscrowd flags to determine if unmatched dts are false pos or not
         iscrowd = [int(o['iscrowd']) for o in gt]
-
         # load computed ious
         ious = self.ious[imgId, catId][:, gtind] if len(self.ious[imgId, catId]) > 0 else self.ious[imgId, catId]
 
-        # compute the matching of dts and gts based on the provided scores
-        T = len(p.iouThrs)
-        G = len(gt)
-        D = len(dt)
-        gtm  = np.zeros((T,G))
-        dtm  = np.zeros((T,D))
-        gtIous = np.zeros((T,G))
-        dtIous = np.zeros((T,D))
-        gtIg = np.array([g['_ignore'] for g in gt])
-        dtIg = np.zeros((T,D))
-        if not len(ious)==0:
-            for tind, t in enumerate(p.iouThrs):
-                for dind, d in enumerate(dt):
-                    # information about best match so far (m=-1 -> unmatched)
-                    iou = min([t,1-1e-10])
-                    m   = -1
-                    for gind, g in enumerate(gt):
-                        # if this gt already matched, and not a crowd, continue
-                        if gtm[tind,gind]>0 and not iscrowd[gind]:
-                            # this ground truth is matched to a previous detection
-                            # and is not a crowd so only 1 match allowed
-                            # continue to next gt when looking for a match
-                            continue
-                        # if dt matched to reg gt, and on ignore gt, stop
-                        if m>-1 and gtIg[m]==0 and gtIg[gind]==1:
-                            # if the last match for this detection (stored in m)
-                            # was done with a non-ignore gt and this current gt
-                            # has ignore flag to 1 then stop looking for matches
-                            # as gts are ordered so that all the following gts are
-                            # with ignore flag == 1 and none of them can "steal"
-                            # a match from a gt with ignore flag == 0
-                            break
-                        # continue to next gt unless better match made
-                        if ious[dind,gind] < iou:
-                            # the iou between this detection and this ground truth
-                            # is lower than a previous match or than the minimum
-                            # iou threshold considered so analyze next gt
-                            continue
-                        # if match successful and best so far, store appropriately
-                        # the iou between this detection and this ground truth is
-                        # the highest so far, so store this as the new match
-                        iou=ious[dind,gind]
-                        m=gind
-                    # if match made store id of match for both dt and gt
-                    if m ==-1:
-                        # looked at all the ground truths and no match was made
-                        # this detection is a false positive, look at next detection
-                        continue
-
-                    dtIg[tind,dind] = gtIg[m]
-                    dtm[tind,dind]  = gt[m]['id']
-                    gtm[tind,m]     = d['id']
-
-                    dtIous[tind,dind]  = iou
-                    gtIous[tind,m]     = iou
-
-        # set unmatched detections outside of area range to ignore
-        a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
-        dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
-
-        # store results for given image and category from the current matching
-        output_dict = {
-                'image_id':     imgId,
-                'category_id':  catId,
-                'aRng':         aRng,
-                'maxDet':       maxDet,
-                'dtIds':        [d['id'] for d in dt],
-                'gtIds':        [g['id'] for g in gt],
-                'dtMatches':    dtm,
-                'gtMatches':    gtm,
-                'dtScores':     [d['score'] for d in dt],
-                'gtIgnore':     gtIg,
-                'dtIgnore':     dtIg,
-                'dtIous':       dtIous,
-                'gtIous':       gtIous
-            }
+        output_dict = self.evaluateImg(imgId, catId, aRng, maxDet)
 
         # compute the optimal matching possible based on given keypoints
-        dt_opt_m      = np.zeros(D)
-        dt_opt_ious   = np.zeros(D)
-        dt_opt_scores = np.zeros(D)
-
-        gt_opt_m    = np.zeros(G)
-        gt_opt_ious = np.zeros(G)
+        # the matching that maximizes the oks score of matched gts and dts
+        # is done with the hungarian algorithm
 
         if len(dt) != 0 and len(gt) != 0:
             # there are both detections and ground truth annotations so an
             # optimal matching is required
+            dt_opt_m      = np.zeros(D)
+            dt_opt_ious   = np.zeros(D)
+            dt_opt_scores = np.zeros(D)
+
+            gt_opt_m    = np.zeros(G)
+            gt_opt_ious = np.zeros(G)
 
             num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
             if num_gt_not_ignore in [0,len(gt)]:
@@ -529,9 +414,14 @@ class COCOeval:
                 # priority (ignore all or none), so the optimal matching can be
                 # done with the whole ious matrix
 
-                # the matching that maximizes the oks score of matched gts and dts
-                # is done with the hungarian algorithm
-                # NOTE: subtracting the max value since we want to maximize utility
+                # dt_opt_m      = np.zeros(D)
+                # dt_opt_ious   = np.zeros(D)
+                # dt_opt_scores = -.01123*np.ones(D)#np.zeros(D)
+                #
+                # gt_opt_m    = np.zeros(G)
+                # gt_opt_ious = np.zeros(G)
+
+                # subtracting the max value since we want to maximize utility
                 # instead of minimizing cost
                 dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious) - ious)
                 assert(len(dt_opt_ind)==len(gt_opt_ind))
@@ -555,17 +445,12 @@ class COCOeval:
                 # so the optimal matching should be done first for the non ignore
                 # ground truths and then for the remaining ones
 
-                # the matching that maximizes the oks score of matched gts and dts
-                # is done with the hungarian algorithm
-                # NOTE: subtracting the max value since we want to maximize utility
-                # instead of minimizing cost
-
-                # the matching is done first on the ground truth annotations that
-                # should not be ignored and later on those that have the ignore flag
-
                 # select the portion of the ious matrix that corresponds to non
                 # ignore ground truth annotations
                 ious_mod = ious[:,:num_gt_not_ignore]
+
+                # subtracting the max value since we want to maximize utility
+                # instead of minimizing cost
                 dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
                 assert(len(dt_opt_ind)==len(gt_opt_ind))
 
@@ -609,16 +494,13 @@ class COCOeval:
                     OldValue = oksm
                     # if we want to discard scoring errors NewValue = 0
                     NewValue = (((OldValue - OldMin) * NewRange) / OldRange) + NewMin
-                    dt_opt_scores[dtind] = NewValue
+                    dt_opt_scores[dtind] = NewValue #OldValue
 
                 dtOptMatches = [int(d) for d in dt_opt_m]
                 gtOptMatches = [int(g) for g in gt_opt_m]
                 dtOptIous    = dt_opt_ious
                 gtOptIous    = gt_opt_ious
                 dtOptScores  = dt_opt_scores.tolist()
-
-                #TODO : print actualScore, optimalScore for matched detections
-
         else:
             if len(dt) == 0:
                 # if there are no detections the optimal scoring cannot be computed
