@@ -832,6 +832,7 @@ class COCOanalyze:
                                          facecolor=colors[lind].rgb, interpolate=True)
 
                     m_map = np.mean(precisions[precisions>-1])
+                    if len(precisions[precisions>-1])==0: m_map=.0
                     interm_m_map = '%.3f'%m_map
                     m_map_val_str = interm_m_map[1-int(interm_m_map[0]):5-int(interm_m_map[0])]
 
