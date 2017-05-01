@@ -160,9 +160,9 @@ class COCOeval:
                         for imgId in p.imgIds
                         for catId in catIds}
 
-        evaluateImg = self.evaluateImg if not check_scores else self.evaluateImgScores
         maxDet = p.maxDets[-1]
-        self.evalImgs = [evaluateImg(imgId, catId, areaRng, maxDet)
+        evaluateImg = self.evaluateImg
+        self.evalImgs = [evaluateImg(imgId, catId, areaRng, maxDet, check_scores)
                  for catId in catIds
                  for areaRng in p.areaRng
                  for imgId in p.imgIds
@@ -244,7 +244,7 @@ class COCOeval:
                 ious[i, j] = np.sum(np.exp(-e)) / e.shape[0]
         return ious
 
-    def evaluateImg(self, imgId, catId, aRng, maxDet):
+    def evaluateImg(self, imgId, catId, aRng, maxDet, check_scores):
         '''
         perform evaluation for single category and image
         :return: dict (single image results)
@@ -336,6 +336,48 @@ class COCOeval:
         a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
 
+        dtOptMatches = []
+        gtOptMatches = []
+        dtOptIous    = []
+        gtOptIous    = []
+        dtOptScores  = [0. for d in dt] if check_scores else []
+        
+        num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
+        # compute the optimal scores
+        if check_scores and len(dt) != 0 and num_gt_not_ignore != 0:
+            # there are both detections and ground truth annotations so an
+            # optimal matching is required
+            dt_opt_m      = np.zeros(D)
+            dt_opt_ious   = np.zeros(D)
+            dt_opt_scores = np.zeros(D)
+
+            gt_opt_m    = np.zeros(G)
+            gt_opt_ious = np.zeros(G)
+
+            # give to every detection a score corresponding to the max
+            # oks it could achieve with not-ignore ground-truth anns
+            ious_mod = ious[:,:num_gt_not_ignore]
+            
+            max_oks    = np.amax(ious_mod, axis=1)
+            dt_opt_ind = [i for i in xrange(len(dt))]
+            gt_opt_ind = np.argmax(ious_mod, axis=1).tolist()
+            #dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
+            assert(len(dt_opt_ind)==len(gt_opt_ind))
+
+            for i, (dtind,gtind) in enumerate(zip(dt_opt_ind,gt_opt_ind)):
+                #print i, dtind, gtind, ious[dtind,gtind]
+                dt_opt_m[dtind]      = gt[gtind]['id']
+                dt_opt_ious[dtind]   = ious[dtind,gtind]
+                dt_opt_scores[dtind] = ious[dtind,gtind]
+                gt_opt_m[gtind]      = dt[dtind]['id']
+                gt_opt_ious[gtind]   = ious[dtind,gtind]
+
+            dtOptMatches = [int(d) for d in dt_opt_m]
+            gtOptMatches = [int(g) for g in gt_opt_m]
+            dtOptIous    = dt_opt_ious
+            gtOptIous    = gt_opt_ious
+            dtOptScores  = dt_opt_scores.tolist()
+
         # store results for given image and category
         return {
                 'image_id':     imgId,
@@ -350,185 +392,13 @@ class COCOeval:
                 'gtIgnore':     gtIg,
                 'dtIgnore':     dtIg,
                 'dtIous':       dtIous,
-                'gtIous':       gtIous
+                'gtIous':       gtIous,
+                'dtOptMatches': dtOptMatches,
+                'gtOptMatches': gtOptMatches,
+                'dtOptIous':    dtOptIous,
+                'gtOptIous':    gtOptIous,
+                'dtOptScores':  dtOptScores
             }
-
-    def evaluateImgScores(self, imgId, catId, aRng, maxDet):
-        '''
-        perform evaluation for single category and image using the optimal score
-        that maximizes the sum of oks over all the matches in the image and minimizes
-        the score for all the detections that remain unmatched.
-        :return: dict (single image results)
-        '''
-        p = self.params
-        if p.useCats:
-            gt = self._gts[imgId,catId]
-            dt = self._dts[imgId,catId]
-        else:
-            gt = [_ for cId in p.catIds for _ in self._gts[imgId,cId]]
-            dt = [_ for cId in p.catIds for _ in self._dts[imgId,cId]]
-        if len(gt) == 0 and len(dt) == 0:
-            return None
-
-        for g in gt:
-            if g['ignore'] or (g['area']<aRng[0] or g['area']>aRng[1]):
-                g['_ignore'] = 1
-            else:
-                g['_ignore'] = 0
-            # allow to set any gtId to be ignored
-            if p.useGtIgnore == 1:
-                if g['id'] in p.gtIgnoreIds:
-                    g['_ignore'] = 1
-
-        # sort dt highest score first, sort gt ignore last
-        gtind = np.argsort([g['_ignore'] for g in gt], kind='mergesort')
-        gt = [gt[i] for i in gtind]
-        dtind = np.argsort([-d['score'] for d in dt], kind='mergesort')
-        dt = [dt[i] for i in dtind[0:maxDet]]
-        G = len(gt)
-        D = len(dt)
-
-        iscrowd = [int(o['iscrowd']) for o in gt]
-        # load computed ious
-        ious = self.ious[imgId, catId][:, gtind] if len(self.ious[imgId, catId]) > 0 else self.ious[imgId, catId]
-
-        output_dict = self.evaluateImg(imgId, catId, aRng, maxDet)
-
-        # compute the optimal matching possible based on given keypoints
-        # the matching that maximizes the oks score of matched gts and dts
-        # is done with the hungarian algorithm
-
-        if len(dt) != 0 and len(gt) != 0:
-            # there are both detections and ground truth annotations so an
-            # optimal matching is required
-            dt_opt_m      = np.zeros(D)
-            dt_opt_ious   = np.zeros(D)
-            dt_opt_scores = np.zeros(D)
-
-            gt_opt_m    = np.zeros(G)
-            gt_opt_ious = np.zeros(G)
-
-            num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
-            if num_gt_not_ignore in [0,len(gt)]:
-                # all the ground truth annotations should be treated with same
-                # priority (ignore all or none), so the optimal matching can be
-                # done with the whole ious matrix
-
-                # dt_opt_m      = np.zeros(D)
-                # dt_opt_ious   = np.zeros(D)
-                # dt_opt_scores = -.01123*np.ones(D)#np.zeros(D)
-                #
-                # gt_opt_m    = np.zeros(G)
-                # gt_opt_ious = np.zeros(G)
-
-                # subtracting the max value since we want to maximize utility
-                # instead of minimizing cost
-                dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious) - ious)
-                assert(len(dt_opt_ind)==len(gt_opt_ind))
-
-                for i, (dtind,gtind) in enumerate(zip(dt_opt_ind,gt_opt_ind)):
-                    #print i, dtind, gtind, ious[dtind,gtind]
-                    dt_opt_m[dtind]      = gt[gtind]['id']
-                    dt_opt_ious[dtind]   = ious[dtind,gtind]
-                    dt_opt_scores[dtind] = ious[dtind,gtind]
-                    gt_opt_m[gtind]      = dt[dtind]['id']
-                    gt_opt_ious[gtind]   = ious[dtind,gtind]
-
-                dtOptMatches = [int(d) for d in dt_opt_m]
-                gtOptMatches = [int(g) for g in gt_opt_m]
-                dtOptIous    = dt_opt_ious
-                gtOptIous    = gt_opt_ious
-                dtOptScores  = dt_opt_scores.tolist()
-
-            else:
-                # some ground truth annotations have ignore flag and some don't
-                # so the optimal matching should be done first for the non ignore
-                # ground truths and then for the remaining ones
-
-                # select the portion of the ious matrix that corresponds to non
-                # ignore ground truth annotations
-                ious_mod = ious[:,:num_gt_not_ignore]
-
-                # subtracting the max value since we want to maximize utility
-                # instead of minimizing cost
-                dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
-                assert(len(dt_opt_ind)==len(gt_opt_ind))
-
-                for (dtind,gtind) in zip(dt_opt_ind,gt_opt_ind):
-                    #print dtind, gtind, ious[dtind,gtind]
-                    dt_opt_m[dtind]      = gt[gtind]['id']
-                    dt_opt_ious[dtind]   = ious_mod[dtind,gtind]
-                    dt_opt_scores[dtind] = ious_mod[dtind,gtind]
-                    gt_opt_m[gtind]      = dt[dtind]['id']
-                    gt_opt_ious[gtind]   = ious_mod[dtind,gtind]
-
-                # get the minimum score and the indxs of the detections
-                # that have not been matched to ground truths
-                unmatched_dts = [idx for idx in xrange(len(dt)) if idx not in dt_opt_ind]
-                ious_mod = ious[unmatched_dts,num_gt_not_ignore:]
-                oks_max  = np.max(ious_mod,    axis=1)
-                oks_amax = np.argmax(ious_mod, axis=1)
-
-                # ensuring that none of the remaining matches can get a score higher
-                # than any of the detections previously matched by remapping
-                # the score to an interval [0,min_score-epsilon] rather than [0,1]
-                ##min_score = np.min( dt_opt_ious[dt_opt_ious!= 0] )
-                min_score = min(enumerate(dt_opt_ious.tolist()),
-                            key=lambda x: x[1] if x[1] > 0 else float('inf'))[1]
-                max_min_score = max(min_score-np.spacing(1),0)
-                OldMin = 0; OldMax = 1
-                NewMin = 0; NewMax = max_min_score
-                OldRange = (OldMax - OldMin)
-                NewRange = (NewMax - NewMin)
-
-                for i, dtind in enumerate(unmatched_dts):
-                    oksm  = oks_max[i]
-                    gtind = oks_amax[i] + num_gt_not_ignore
-                    assert(oksm == ious[dtind,gtind])
-
-                    dt_opt_m[dtind]    = gt[gtind]['id']
-                    dt_opt_ious[dtind] = oksm
-                    gt_opt_m[gtind]    = dt[dtind]['id']
-                    gt_opt_ious[gtind] = oksm
-
-                    OldValue = oksm
-                    # if we want to discard scoring errors NewValue = 0
-                    NewValue = (((OldValue - OldMin) * NewRange) / OldRange) + NewMin
-                    dt_opt_scores[dtind] = NewValue #OldValue
-
-                dtOptMatches = [int(d) for d in dt_opt_m]
-                gtOptMatches = [int(g) for g in gt_opt_m]
-                dtOptIous    = dt_opt_ious
-                gtOptIous    = gt_opt_ious
-                dtOptScores  = dt_opt_scores.tolist()
-        else:
-            if len(dt) == 0:
-                # if there are no detections the optimal scoring cannot be computed
-                # all the ground truth annotations will be false negatives
-                dtOptMatches = []
-                gtOptMatches = []
-                dtOptIous    = []
-                gtOptIous    = []
-                dtOptScores  = []
-
-            if len(gt) == 0:
-                # there are some detections but no ground truth annotations
-                # all of these detections are hallucinated false positives
-                # optimal score is to set their confidence to 0
-                dtOptMatches = []
-                gtOptMatches = []
-                dtOptIous    = []
-                gtOptIous    = []
-                dtOptScores  = [0. for d in dt]
-
-        # extend the output dictionary with the info from the optimal matches
-        output_dict['dtOptMatches'] = dtOptMatches
-        output_dict['gtOptMatches'] = gtOptMatches
-        output_dict['dtOptIous']    = dtOptIous
-        output_dict['gtOptIous']    = gtOptIous
-        output_dict['dtOptScores']  = dtOptScores
-
-        return output_dict
 
     def accumulate(self, p = None):
         '''
@@ -576,12 +446,11 @@ class COCOeval:
                     E = [e for e in E if not e is None]
                     if len(E) == 0:
                         continue
-                    dtScores = np.concatenate([e['dtScores'][0:maxDet] for e in E])
 
+                    dtScores = np.concatenate([e['dtScores'][0:maxDet] for e in E])
                     # different sorting method generates slightly different results.
                     # mergesort is used to be consistent as Matlab implementation.
                     inds = np.argsort(-dtScores, kind='mergesort')
-
                     dtm  = np.concatenate([e['dtMatches'][:,0:maxDet] for e in E], axis=1)[:,inds]
                     dtIg = np.concatenate([e['dtIgnore'][:,0:maxDet]  for e in E], axis=1)[:,inds]
                     gtIg = np.concatenate([e['gtIgnore'] for e in E])
@@ -593,6 +462,7 @@ class COCOeval:
 
                     tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
                     fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
+                    
                     for t, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):
                         tp = np.array(tp)
                         fp = np.array(fp)

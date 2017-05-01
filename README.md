@@ -1,15 +1,17 @@
 # coco-analyze
-A class wrapping the COCOeval class to run extended analysis for keypoint error estimation. 
 
 Contains:
- - pycocotools for an extended analysis of keypoint error estimation
- - python and ipython notebook demos showing functionalities and usage
-
+ - The COCOanalyze class, a wrapper of the COCOeval class.
+ - run_analysis.py, a script for extended keypoint error estimation analysis using COCOanalyze.
+ 
 Notes:
- - COCOeval class is modified from the version in the mscoco repository.
+ - COCOeval class contained in pycocotools directory is a modified version of the mscoco repository class.
  - COCOanalyze class is newly written.
+ - run_analysis.py will reproduce the plots from the paper "Benchmarking and Error Diagnosis in Multi-Instance Pose Estimation", for a different analysis use the variables returned by COCOanalyze for your specific needs.
 
-Instructions:
- - add pycocotools to your path
- - setup paths of detections and ground truths correctly
- - run the demo scripts
+To run the extended keypoint error estimation analysis:
+ - [annFile]  -> ./annotations/keypoints_val2014.json
+ - [resFile]  -> ./results/fakekeypoints100_keypoints_val2014_results.json
+ - [saveDir]  -> ./analysis
+ - [teamName] -> fakekeypoints100
+ - $ python run_analysis.py [annFile] [resFile] [saveDir] [teamName]

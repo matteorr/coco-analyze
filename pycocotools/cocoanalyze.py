@@ -105,7 +105,6 @@ class COCOanalyze:
                 d['keypoints'] = self._original_dts[d['id']]['keypoints']
                 d['score']     = self._original_dts[d['id']]['score']
         self.corrected_dts = copy.deepcopy(self._dts)
-        # reset false negatives to empty
         self.false_neg_gts = []
 
         # find keypoint errors in detections that are matched to ground truths
@@ -149,7 +148,8 @@ class COCOanalyze:
         if check_scores:
             self.correct_scores()
 
-        # change the detections in the cocoEval object to the original kpts
+        # the above analysis changed keypoints in the cocoEval object
+        # restore them to their original value.
         for cdt in self.corrected_dts:
             #if 'opt_keypoints' not in cdt: continue
             dtid     = cdt['id']
@@ -172,6 +172,7 @@ class COCOanalyze:
         print('<{}:{}>Analyzing keypoint errors...'.format(__author__,__version__))
 
         # find all matches between dts and gts at the lowest iou thresh
+        # allowed for localization. Matches with lower oks are not valid
         dtMatches, gtMatches = self._find_dt_matches(self.params.oksLocThrs)
         self.matches['dts'] = dtMatches
         self.matches['gts'] = gtMatches
@@ -203,7 +204,7 @@ class COCOanalyze:
         print('<{}:{}>Analyzing detection scores...'.format(__author__,__version__))
 
         # find matches before changing the scores
-        dtMatches, gtMatches = self._find_dt_matches(min(self.params.oksThrs))
+        dtMatches, gtMatches = self._find_dt_matches(self.params.oksLocThrs) #min(self.params.oksThrs)
         self.score_matches['dts'] = dtMatches
         self.score_matches['gts'] = gtMatches
 
@@ -685,7 +686,7 @@ class COCOanalyze:
                     d['score'] = cdt['opt_score']
                     break
 
-        dtMatches, gtMatches = self._find_dt_matches(min(self.params.oksThrs))
+        dtMatches, gtMatches = self._find_dt_matches(self.params.oksLocThrs) #min(self.params.oksThrs)
         self.opt_score_matches['dts'] = dtMatches
         self.opt_score_matches['gts'] = gtMatches
 
@@ -859,7 +860,7 @@ class COCOanalyze:
                     prefix = 'error_prc' if err_labels else 'prc'
                     oks_str = '[%s]'%(int(100*iouThrs[0])) if err_labels else ''
 
-                    savepath = '{}/{}_[{}][{}][{}]{}.pdf'.format(savedir,prefix,team_name,a,m,oks_str)
+                    savepath = '{}/{}_[{}]{}[{}][{}].pdf'.format(savedir,prefix,team_name,oks_str,a,m)
                     plt.savefig(savepath,bbox_inches='tight')
                     plt.close()
 
@@ -923,7 +924,7 @@ class Params:
         self.err_types = ['miss','swap','inversion','jitter']
         self.check_kpts   = True
         self.check_scores = True
-        self.check_bkgd  = True
+        self.check_bkgd   = True
 
     def __init__(self, iouType='keypoints'):
         if iouType == 'keypoints':
