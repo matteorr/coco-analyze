@@ -2,6 +2,7 @@
 annotations/
 analysis/
 results/
+detections/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

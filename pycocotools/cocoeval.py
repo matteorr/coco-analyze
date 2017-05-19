@@ -341,7 +341,8 @@ class COCOeval:
         dtOptIous    = []
         gtOptIous    = []
         dtOptScores  = [0. for d in dt] if check_scores else []
-        
+        #dtOptScores  = [d['score'] for d in dt] if check_scores else []
+
         num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
         # compute the optimal scores
         if check_scores and len(dt) != 0 and num_gt_not_ignore != 0:
@@ -357,11 +358,11 @@ class COCOeval:
             # give to every detection a score corresponding to the max
             # oks it could achieve with not-ignore ground-truth anns
             ious_mod = ious[:,:num_gt_not_ignore]
-            
+
             max_oks    = np.amax(ious_mod, axis=1)
-            dt_opt_ind = [i for i in xrange(len(dt))]
-            gt_opt_ind = np.argmax(ious_mod, axis=1).tolist()
-            #dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
+            #dt_opt_ind = [i for i in xrange(len(dt))]
+            #gt_opt_ind = np.argmax(ious_mod, axis=1).tolist()
+            dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
             assert(len(dt_opt_ind)==len(gt_opt_ind))
 
             for i, (dtind,gtind) in enumerate(zip(dt_opt_ind,gt_opt_ind)):
@@ -462,7 +463,24 @@ class COCOeval:
 
                     tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
                     fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
-                    
+                    # dtIds  = np.concatenate([e['dtIds'][0:maxDet] for e in E])[:,inds]
+                    # print len(gtIg)
+                    # print fps.shape
+                    # idxsfp = []
+                    # for iii,f in enumerate(fps[0,:]):
+                    #     if f == True:
+                    #         idxsfp.append(iii)
+                    #
+                    # print tp_sum
+                    # print fp_sum
+                    # print len(idxsfp)
+                    # if len(idxsfp) < 200:
+                    #     for iii in idxsfp:
+                    #         print "==============="
+                    #         print dtIds[iii]
+                    #         print dtm[0,iii]
+                    #         print dtIg[0,iii]
+                    #         print gtIg[iii]
                     for t, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):
                         tp = np.array(tp)
                         fp = np.array(fp)
