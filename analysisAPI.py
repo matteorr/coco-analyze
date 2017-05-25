@@ -5,6 +5,7 @@ from colour import Color
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
 from scipy.misc import imresize
+import skimage.io as io
 
 def errorsAUCImpact( coco_analyze, saveDir, pdf=None ):
     loc_dir = saveDir + '/AUC_impact'
@@ -116,6 +117,7 @@ def localizationKeypointBreakdown( coco_analyze, saveDir, pdf=None ):
     f.write("Number matches:    [%d]\n\n"%len(matched_dts))
 
     good = 0; jitter = 0; inversion = 0; swap = 0; miss = 0; tot = 0.
+    good_keypoints = np.zeros(17)
     jitt_keypoints = np.zeros(17); inv_keypoints  = np.zeros(17)
     swap_keypoints = np.zeros(17); miss_keypoints = np.zeros(17)
 
@@ -127,6 +129,7 @@ def localizationKeypointBreakdown( coco_analyze, saveDir, pdf=None ):
         jitter    += sum(dtm['jitter']); inversion += sum(dtm['inversion'])
         swap      += sum(dtm['swap']);   miss      += sum(dtm['miss'])
 
+        good_keypoints += np.array(dtm['good'])
         jitt_keypoints += np.array(dtm['jitter'])
         inv_keypoints  += np.array(dtm['inversion'])
         swap_keypoints += np.array(dtm['swap'])
@@ -163,7 +166,41 @@ def localizationKeypointBreakdown( coco_analyze, saveDir, pdf=None ):
     if pdf: pdf.savefig()
     plt.close()
 
+    fig = plt.figure(figsize=(15,15)); plt.axis('off')
+    I = io.imread('./manikin.jpg')
+    plt.imshow(I); ax = plt.gca(); ax.set_autoscale_on(False)
+
+    rects_d = {}
+    rects_d['nose']          = .47,.75,.07,.07
+    rects_d['left_eye']      = .5, .83,.07,.07; rects_d['right_eye']      = .44,.83,.07,.07
+    rects_d['left_ear']      = .54,.77,.07,.07; rects_d['right_ear']      = .4, .77,.07,.07
+    rects_d['left_shoulder'] = .58,.68,.1, .1;  rects_d['right_shoulder'] = .32,.65,.1, .1
+    rects_d['left_elbow']    = .67,.6, .1, .1;  rects_d['right_elbow']    = .27,.52,.1, .1
+    rects_d['left_wrist']    = .59,.49,.1, .1;  rects_d['right_wrist']    = .34,.42,.1, .1
+    rects_d['left_hip']      = .48,.5, .1, .1;  rects_d['right_hip']      = .39,.5, .1, .1
+    rects_d['left_knee']     = .55,.32,.1, .1;  rects_d['right_knee']     = .4, .32,.1, .1
+    rects_d['left_ankle']    = .55,.15,.1, .1;  rects_d['right_ankle']    = .4, .15,.1, .1
+    order = ['nose','left_eye','right_eye','left_ear','right_ear',
+             'left_shoulder','right_shoulder','left_elbow','right_elbow',
+             'left_wrist','right_wrist','left_hip','right_hip',
+             'left_knee','right_knee','left_ankle','right_ankle']
+    COLORS = ['#8C4646','#D96459','#F2AE72','#F2E394'][::-1]
+    for oi, ok in enumerate(order):
+        rect = rects_d[ok]
+        ax1 = fig.add_axes(rect)
+        explode = (0.0,0.0,0.0,0.0)
+        ERRORS = [jitt_keypoints[oi],inv_keypoints[oi],swap_keypoints[oi],miss_keypoints[oi]]
+        ERRORS /= sum(ERRORS)
+        patches, autotexts = ax1.pie( ERRORS, explode=explode, colors=COLORS)
+
+    lgd=fig.legend(patches, ['Jitter','Inversion','Swap','Miss'][::-1],
+        loc="upper center",ncol=len(patches),fancybox=True, shadow=True,fontsize=18)
+    plt.savefig("%s/keypoint_breakdown.pdf"%loc_dir, bbox_inches='tight')
+    if pdf: pdf.savefig()
+    plt.close()
+
     f.write("Per keypoint breakdown:\n")
+    f.write(" - Good:      %s\n"%good_keypoints)
     f.write(" - Jitter:    %s\n"%jitt_keypoints)
     f.write(" - Inversion: %s\n"%inv_keypoints)
     f.write(" - Swap:      %s\n"%swap_keypoints)
@@ -176,7 +213,6 @@ def localizationKeypointBreakdown( coco_analyze, saveDir, pdf=None ):
     ####################################
     err_vecs = [jitt_keypoints,inv_keypoints,swap_keypoints,miss_keypoints]
     for j, err_type in enumerate(['Jitter', 'Inversion', 'Swap', 'Miss']):
-
         TOT_LABELS = []
         ERRORS = []
         for i in KEYPOINTS_I:
@@ -199,94 +235,6 @@ def localizationKeypointBreakdown( coco_analyze, saveDir, pdf=None ):
         plt.savefig("%s/%s.pdf"%(loc_dir,err_type), bbox_extra_artists=(lgd,), bbox_inches='tight')
         if pdf: pdf.savefig()
         plt.close()
-
-    f.write("\nDone, (t=%.2fs)."%(time.time()-tic))
-    f.close()
-
-def localizationAUCImpact( coco_analyze, saveDir, pdf=None ):
-    loc_dir = saveDir + '/localization_errors/AUC_impact'
-    if not os.path.exists(loc_dir):
-        os.makedirs(loc_dir)
-        os.makedirs(loc_dir+'/all_plots')
-    f = open('%s/std_out.txt'%loc_dir, 'w')
-    f.write("Running Analysis: [Localization AUC Impact]\n\n")
-    tic = time.time()
-
-    oksVals = [.5,.55,.6,.65,.7,.75,.8,.85,.9,.95]
-    err_types = ['miss','swap', 'inversion', 'jitter']
-    colors    = ['#F2E394', '#F2AE72','#D96459', '#8C4646']
-    coco_analyze.params.areaRng    = [[32**2,1e5**2],[32**2,96**2],[96**2,1e5**2]]
-    coco_analyze.params.areaRngLbl = ['all','medium','large']
-    coco_analyze.params.oksThrs    = oksVals
-    coco_analyze.cocoEval.params.useGtIgnore = 0
-    coco_analyze.cocoEval.params.gtIgnoreIds = []
-
-    total_res = []
-    for err in err_types:
-        coco_analyze.params.err_types = [err]
-        coco_analyze.analyze(check_kpts=True, check_scores=False, check_bckgd=False)
-        coco_analyze.summarize(makeplots=True, savedir=loc_dir+'/all_plots', team_name=err)
-        total_res += coco_analyze.stats
-    total_res = [dict(t) for t in set([tuple(d.items()) for d in total_res])]
-
-    baselines = {}
-    for b in total_res:
-        if b['err'] == 'baseline':
-            baselines[b['oks'],b['areaRngLbl']] = b['auc']
-
-    errors = {}
-    for eind, err in enumerate(err_types):
-        f.write("\n[%s] Errors AUC impact (for OKS evaluation thresholds in [.5,.95]):\n"%err)
-        for aind, area in enumerate(coco_analyze.params.areaRngLbl):
-            res = sorted([x for x in total_res if x['err']==err and x['areaRngLbl']==area],
-                    key=lambda k: k['oks'])
-            errors[err,area] = [x['auc']-baselines[x['oks'],x['areaRngLbl']] for x in res]
-            f.write("Area Range [%s]: %s\n"%(area, errors[err,area]))
-
-    x = 0
-    means_list  = []
-    stds_list   = []
-    colors_list = []
-    x_list = []
-    x_ticks_list = []
-    for aind, area in enumerate(coco_analyze.params.areaRngLbl):
-        legend_colors = []
-        x += 1
-        for i, err in enumerate(err_types):
-            fig, ax = plt.subplots(figsize=(20,10))
-            err_vec = errors[err,area]
-            means_list.append(np.mean(err_vec))
-            stds_list.append(np.std(err_vec))
-            colors_list.append(colors[i])
-            x_list.append(x)
-            if i==2: x_ticks_list.append(x)
-            x += 1
-
-            rects1 = ax.bar(oksVals, err_vec, .04, color=colors[i], align='center')
-            legend_colors.append(rects1)
-            ax.set_xticks(oksVals)
-            plt.title("Error Type: [%s], Instances Size: [%s]"%(err,area),fontsize=20)
-            plt.xlabel('OKS Evaluation Thresh', fontsize=20)
-            plt.ylabel('AUC impact',fontsize=20)
-            plt.xlim([0.45,1.])
-            plt.grid()
-            plt.savefig('%s/%s_[%s].pdf'%(loc_dir,err.title(),area), bbox_inches='tight')
-            plt.close()
-
-    fig, ax = plt.subplots(figsize=(20,10))
-    rects = ax.bar(x_list, means_list, 1, color=colors_list, yerr=stds_list)
-
-    lgd=fig.legend(rects[:len(err_types)], err_types, loc="upper center",
-    ncol=4,fancybox=True, shadow=True,fontsize=18)
-
-    ax.set_xticks(x_ticks_list)
-    ax.set_xticklabels(coco_analyze.params.areaRngLbl,fontsize=16)
-    plt.ylabel('AUC impact',fontsize=20)
-    plt.xlabel('Instances Size',fontsize=20)
-    plt.grid()
-    plt.savefig('%s/overall.pdf'%loc_dir, bbox_inches='tight')
-    if pdf: pdf.savefig()
-    plt.close()
 
     f.write("\nDone, (t=%.2fs)."%(time.time()-tic))
     f.close()
@@ -403,138 +351,6 @@ def localizationOKSImpact( coco_analyze, oks, saveDir, pdf=None ):
     plt.savefig('%s/overall.pdf'%loc_dir,bbox_inches='tight')
     if pdf: pdf.savefig()
     plt.close()
-
-    f.write("\nDone, (t=%.2fs)."%(time.time()-tic))
-    f.close()
-
-def scoringAUCImpact( coco_analyze, saveDir, pdf ):
-    loc_dir = saveDir + '/scoring_errors/AUC_impact'
-    if not os.path.exists(loc_dir):
-        os.makedirs(loc_dir)
-        os.makedirs(loc_dir+'/all_plots')
-    f = open('%s/std_out.txt'%loc_dir, 'w')
-    f.write("Running Analysis: [Scoring AUC Impact]\n\n")
-    tic = time.time()
-
-    areaRngs    = [[32**2,1e5**2],[32**2,96**2],[96**2,1e5**2]]
-    areaRngLbls = ['all','medium','large']
-    oksVals     = [.5,.55,.6,.65,.7,.75,.8,.85,.9,.95]
-    coco_analyze.cocoEval.params.useGtIgnore = 0
-    coco_analyze.cocoEval.params.gtIgnoreIds = []
-    coco_analyze.params.areaRng    = areaRngs
-    coco_analyze.params.areaRngLbl = areaRngLbls
-    coco_analyze.params.oksThrs    = oksVals
-
-    coco_analyze.analyze(check_kpts=False, check_scores=True, check_bckgd=False)
-    coco_analyze.summarize(makeplots=True, savedir=loc_dir+'/all_plots', team_name='scoring')
-    total_res = coco_analyze.stats
-
-    baselines = {}
-    for b in total_res:
-        if b['err'] == 'baseline':
-            baselines[b['oks'],b['areaRngLbl']] = b['auc']
-
-    total_res = sorted(total_res, key=lambda k: k['oks'])
-
-    score_errors = {}
-    f.write("\nScoring Errors AUC impact (for OKS evaluation thresholds in [.5,.95]):\n")
-    for aind, area in enumerate(coco_analyze.params.areaRngLbl):
-        res = sorted([x for x in total_res if x['err']=='score' and x['areaRngLbl']==area],
-                key=lambda k: k['oks'])
-        score_errors[area] = [x['auc']-baselines[x['oks'],x['areaRngLbl']] for x in res]
-        f.write("Area Range [%s]: %s\n"%(area, score_errors[area]))
-
-    for aind, area in enumerate(coco_analyze.params.areaRngLbl):
-        fig, ax = plt.subplots(figsize=(20,10))
-        rects1 = ax.bar(oksVals, score_errors[area], color='blue',alpha=.65,align='center',width=.04)
-        ax.set_xticks(oksVals)
-        plt.title("Scoring Errors, Instances Size: [%s]"%area,fontsize=20)
-        plt.xlabel('OKS Evaluation Thresh', fontsize=20)
-        plt.ylabel('AUC impact',fontsize=20)
-        plt.xlim([0.45,1.])
-        plt.grid()
-        plt.savefig('%s/%s.pdf'%(loc_dir,area),bbox_inches='tight')
-        if area =='all':
-            if pdf: pdf.savefig()
-        plt.close()
-
-    f.write("\nDone, (t=%.2fs)."%(time.time()-tic))
-    f.close()
-
-def backgroundAUCImpact( coco_analyze, saveDir ):
-    loc_dir = saveDir + '/background_errors/AUC_impact'
-    if not os.path.exists(loc_dir):
-        os.makedirs(loc_dir)
-        os.makedirs(loc_dir+'/all_plots')
-    f = open('%s/std_out.txt'%loc_dir, 'w')
-    f.write("Running Analysis: [Background AUC Impact]\n\n")
-    tic = time.time()
-
-    areaRngs    = [[32**2,1e5**2],[32**2,96**2],[96**2,1e5**2]]
-    areaRngLbls = ['all','medium','large']
-    oksVals     = [.5,.55,.6,.65,.7,.75,.8,.85,.9,.95]
-    coco_analyze.cocoEval.params.useGtIgnore = 0
-    coco_analyze.cocoEval.params.gtIgnoreIds = []
-
-    total_res = []
-    for areaRng,areaRngLbl in zip(areaRngs,areaRngLbls):
-        coco_analyze.params.areaRng    = [areaRng]
-        coco_analyze.params.areaRngLbl = [areaRngLbl]
-
-        for oks in oksVals:
-            coco_analyze.params.oksThrs = [oks]
-
-            coco_analyze.params.err_types = []
-            coco_analyze.analyze(check_kpts=False,
-                                 check_scores=False,
-                                 check_bkgd=True)
-            coco_analyze.summarize(makeplots=True, savedir=loc_dir+'/all_plots', team_name='background')
-            total_res += coco_analyze.stats
-
-    baselines = {}
-    for b in total_res:
-        if 'err' not in b:
-            baselines[b['oks'],b['areaRng']] = b['auc']
-
-    ## get background fp improvements
-    bkfp_imp_med = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                      if 'err' in x and x['err']=='bkg_false_pos' and x['areaRng']=='medium']
-    bkfp_imp_lrg = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                      if 'err' in x and x['err']=='bkg_false_pos' and x['areaRng']=='large']
-    bkfp_imp_all = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                      if 'err' in x and x['err']=='bkg_false_pos' and x['areaRng']=='all']
-    f.write("Background False Positive Errors AUC impact (for OKS evaluation thresholds in [.5,.95]):\n")
-    f.write("Area Range Medium: %s\n"%bkfp_imp_med)
-    f.write("Area Range Large:  %s\n"%bkfp_imp_lrg)
-    f.write("Area Range All:    %s\n\n"%bkfp_imp_all)
-
-    ## get false neg improvements
-    fn_imp_med = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                    if 'err' in x and x['err']=='false_neg' and x['areaRng']=='medium']
-    fn_imp_lrg = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                    if 'err' in x and x['err']=='false_neg' and x['areaRng']=='large']
-    fn_imp_all = [x['auc']-baselines[x['oks'],x['areaRng']] for x in total_res \
-                    if 'err' in x and x['err']=='false_neg' and x['areaRng']=='all']
-    f.write("False Negative Errors AUC impact (for OKS evaluation thresholds in [.5,.95]):\n")
-    f.write("Area Range Medium: %s\n"%fn_imp_med)
-    f.write("Area Range Large:  %s\n"%fn_imp_lrg)
-    f.write("Area Range All:    %s\n"%fn_imp_all)
-
-    errors = ['Backround_False_Positives', 'False_Negatives']
-    colors = ['purple','seagreen']
-    err_vecs = [bkfp_imp_all, fn_imp_all]
-    for i, err_type in enumerate(errors):
-        fig, ax = plt.subplots(figsize=(20,10))
-        err_vec = err_vecs[i]
-        rects1 = ax.bar(oksVals, err_vec, .04, color=colors[i], align='center')
-        ax.set_xticks(oksVals)
-        plt.title("Instances Size: all",fontsize=20)
-        plt.xlabel('OKS Evaluation Thresh', fontsize=20)
-        plt.ylabel('AUC impact',fontsize=20)
-        plt.xlim([0.45,1.])
-        plt.grid()
-        plt.savefig('%s/%s.pdf'%(loc_dir,err_type), bbox_inches='tight')
-        plt.close()
 
     f.write("\nDone, (t=%.2fs)."%(time.time()-tic))
     f.close()

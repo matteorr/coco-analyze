@@ -10,6 +10,8 @@ plt.rcParams['ytick.labelsize'] = 16
 plt.rcParams['font.family']     = 'monospace'
 from colour import Color
 
+import skimage.io as io
+
 class COCOanalyze:
     # Interface for analyzing the keypoints detections on the Microsoft COCO dataset.
     def __init__(self, cocoGt, cocoDt, iouType='keypoints'):
@@ -433,26 +435,70 @@ class COCOanalyze:
             evalImgsArea = [e for e in filter(None,evalImgs) if
                             e['aRng']==self.params.areaRng[aind]]
 
-            opt_scores = {}
+            max_oks = {};
             for e in evalImgsArea:
                 dtIds       = e['dtIds']
-                dtOptScores = e['dtOptScores']
-                for i,j in zip(dtIds,dtOptScores):
-                    opt_scores[i] = j
-            assert(len(opt_scores) == len(self._dts))
+                dtScoresMax = e['dtIousMax']
+                for i,j in zip(dtIds,dtScoresMax):
+                    max_oks[i] = j
+            # if assertion fails not all the detections have been evaluated
+            assert(len(max_oks) == len(self._dts))
 
+            # do soft non max suppression
+            _soft_nms_dts = self._soft_nms(max_oks)
             for cdt in self.corrected_dts[areaRngLbl]:
-                cdt['opt_score'] = opt_scores[cdt['id']]
+                d = _soft_nms_dts[cdt['id']]
+                cdt['opt_score'] = d['opt_score']
+                cdt['max_oks']   = d['max_oks']
 
         toc = time.time()
         print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+
+    def _soft_nms(self, max_oks):
+        _soft_nms_dts = {}
+
+        variances = (self.params.sigmas * 2)**2
+        for imgId in self.params.imgIds:
+            B = []; D = []
+            for d in self.cocoEval._dts[imgId, self.params.catIds[0]]:
+                dt = {}; dt['keypoints'] = d['keypoints']
+                dt['max_oks']   = max_oks[d['id']]
+                dt['opt_score'] = max_oks[d['id']]
+                _soft_nms_dts[d['id']] = dt
+                B.append(dt)
+            if len(B) == 0: continue
+            while len(B) > 0:
+                argmax = np.argmax([dt['opt_score'] for dt in B])
+                M      = B[argmax]
+                D.append(M); B.remove(M)
+                m_kpts =  np.array(M['keypoints'])
+                m_xs = m_kpts[0::3]; m_ys = m_kpts[1::3]
+                x0,x1,y0,y1 = np.min(m_xs), np.max(m_xs), np.min(m_ys), np.max(m_ys)
+                m_area = (x1-x0)*(y1-y0)
+
+                for dt in B:
+                    d_kpts = np.array(dt['keypoints'])
+                    d_xs = d_kpts[0::3]; d_ys = d_kpts[1::3]
+                    x0,x1,y0,y1 = np.min(d_xs), np.max(d_xs), np.min(d_ys), np.max(d_ys)
+                    d_area = (x1-x0)*(y1-y0)
+
+                    deltax = d_xs - m_xs; deltay = d_ys - m_ys
+                    # using the average of both areas as area for oks computation
+                    e = (deltax**2 + deltay**2) / variances / ((.5*(m_area+d_area))+np.spacing(1)) / 2
+                    oks = np.sum(np.exp(-e)) / e.shape[0]
+
+                    old_score = dt['opt_score']
+                    e = (oks ** 2) / .5 # .5 is a hyperparameter from soft_nms paper
+                    new_score = old_score * np.exp(-e)
+                    dt['opt_score'] = new_score
+                    #print old_score, oks, new_score
+        return _soft_nms_dts
 
     def _correct_dt_scores(self, areaRngLbl):
         # change the detections in the cocoEval object to the corrected score
         for cdt in self.corrected_dts[areaRngLbl]:
             dtid     = cdt['id']
             image_id = cdt['image_id']
-
             # loop through all detections in the image and change only the
             # corresponsing detection cdt being analyzed
             for d in self.cocoEval._dts[image_id, self.params.catIds[0]]:
@@ -678,18 +724,6 @@ class COCOanalyze:
             self.cocoEval.params.areaRng    = [self.params.areaRng[aind]]
             self.cocoEval.params.areaRngLbl = [arearnglbl]
             if self.params.check_kpts: self._correct_dt_keypoints(arearnglbl)
-
-            # zweros={}
-            # for d in self.corrected_dts[arearnglbl]:
-            #     for oks in [.95]:
-            #         if d['id'] in self.false_pos_dts[arearnglbl,oks] and d['opt_score']!=0:
-            #             d['opt_score']=0.
-            #             if oks in zweros:
-            #                 zweros[oks] += 1
-            #             else:
-            #                 zweros[oks]=1
-            # for k in zweros: print k, zweros[k]
-
             self._correct_dt_scores(arearnglbl)
 
             self.cocoEval.evaluate()

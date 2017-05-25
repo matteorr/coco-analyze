@@ -336,48 +336,35 @@ class COCOeval:
         a = np.array([d['area']<aRng[0] or d['area']>aRng[1] for d in dt]).reshape((1, len(dt)))
         dtIg = np.logical_or(dtIg, np.logical_and(dtm==0, np.repeat(a,T,0)))
 
-        dtOptMatches = []
-        gtOptMatches = []
-        dtOptIous    = []
-        gtOptIous    = []
-        dtOptScores  = [0. for d in dt] if check_scores else []
-        #dtOptScores  = [d['score'] for d in dt] if check_scores else []
+        # store the max iou achiavable by every matched detection and ground-truth
+        dtMatchesMax = []; gtMatchesMax = []
+        dtIousMax    = [0. for d in dt] if check_scores else []
+        gtIousMax    = [0. for g in gt] if check_scores else []
 
-        num_gt_not_ignore = len([g for g in gt if g['_ignore']==0])
+        gtNotIgnore = len([g for g in gt if g['_ignore']==0])
         # compute the optimal scores
-        if check_scores and len(dt) != 0 and num_gt_not_ignore != 0:
+        if check_scores and len(dt) != 0 and gtNotIgnore != 0:
             # there are both detections and ground truth annotations so an
             # optimal matching is required
-            dt_opt_m      = np.zeros(D)
-            dt_opt_ious   = np.zeros(D)
-            dt_opt_scores = np.zeros(D)
-
-            gt_opt_m    = np.zeros(G)
-            gt_opt_ious = np.zeros(G)
-
+            dt_m_max = np.zeros(D); dt_ious_max = np.zeros(D)
+            gt_m_max = np.zeros(G); gt_ious_max = np.zeros(G)
             # give to every detection a score corresponding to the max
             # oks it could achieve with not-ignore ground-truth anns
-            ious_mod = ious[:,:num_gt_not_ignore]
+            ious_mod = ious[:,:gtNotIgnore]
 
-            max_oks    = np.amax(ious_mod, axis=1)
-            #dt_opt_ind = [i for i in xrange(len(dt))]
-            #gt_opt_ind = np.argmax(ious_mod, axis=1).tolist()
-            dt_opt_ind, gt_opt_ind = linear_sum_assignment(np.max(ious_mod) - ious_mod)
-            assert(len(dt_opt_ind)==len(gt_opt_ind))
+            max_oks     = np.amax(ious_mod, axis=1)
+            dt_inds_max = [i for i in xrange(len(dt))]
+            gt_inds_max = np.argmax(ious_mod, axis=1).tolist()
+            for i, (dtind,gtind) in enumerate(zip(dt_inds_max,gt_inds_max)):
+                dt_m_max[dtind]      = gt[gtind]['id']
+                gt_m_max[gtind]      = dt[dtind]['id']
+                dt_ious_max[dtind]   = ious[dtind,gtind]
+                gt_ious_max[gtind]   = ious[dtind,gtind]
 
-            for i, (dtind,gtind) in enumerate(zip(dt_opt_ind,gt_opt_ind)):
-                #print i, dtind, gtind, ious[dtind,gtind]
-                dt_opt_m[dtind]      = gt[gtind]['id']
-                dt_opt_ious[dtind]   = ious[dtind,gtind]
-                dt_opt_scores[dtind] = ious[dtind,gtind]
-                gt_opt_m[gtind]      = dt[dtind]['id']
-                gt_opt_ious[gtind]   = ious[dtind,gtind]
-
-            dtOptMatches = [int(d) for d in dt_opt_m]
-            gtOptMatches = [int(g) for g in gt_opt_m]
-            dtOptIous    = dt_opt_ious
-            gtOptIous    = gt_opt_ious
-            dtOptScores  = dt_opt_scores.tolist()
+            dtMatchesMax = [int(d) for d in dt_m_max]
+            gtMatchesMax = [int(g) for g in gt_m_max]
+            dtIousMax    = dt_ious_max.tolist()
+            gtIousMax    = gt_ious_max.tolist()
 
         # store results for given image and category
         return {
@@ -394,11 +381,10 @@ class COCOeval:
                 'dtIgnore':     dtIg,
                 'dtIous':       dtIous,
                 'gtIous':       gtIous,
-                'dtOptMatches': dtOptMatches,
-                'gtOptMatches': gtOptMatches,
-                'dtOptIous':    dtOptIous,
-                'gtOptIous':    gtOptIous,
-                'dtOptScores':  dtOptScores
+                'dtMatchesMax': dtMatchesMax,
+                'gtMatchesMax': gtMatchesMax,
+                'dtIousMax':    dtIousMax,
+                'gtIousMax':    gtIousMax
             }
 
     def accumulate(self, p = None):

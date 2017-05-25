@@ -30,6 +30,16 @@ def main():
     team_dts = json.load(open(resFile,'rb'))
     team_dts = [d for d in team_dts if d['image_id'] in imgs_info]
     team_img_ids = set([d['image_id'] for d in team_dts])
+    team_dts_dict = {}
+    for d in team_dts:
+        if d['image_id'] in team_dts_dict:
+            team_dts_dict[d['image_id']].append(d)
+        else:
+            team_dts_dict[d['image_id']] = [d]
+    pruned_team_dts = []
+    for iid in team_dts_dict:
+        pruned_team_dts.extend(sorted(team_dts_dict[iid], key=lambda k: -k['score'])[:20])
+    team_dts = pruned_team_dts
     print("Loaded [{}] detections from [{}] images.".format(len(team_dts),len(imgs_info)))
     # # suppress the detections to be only 20 per image
     # team_img_dts = {}
@@ -58,15 +68,12 @@ def main():
         imgIds  = sorted(coco_gt.getImgIds())[0:100]
         coco_analyze.cocoEval.params.imgIds = imgIds
 
-    coco_analyze.evaluate(verbose=True, makeplots=True, savedir=saveDir, team_name=teamName)
+    #coco_analyze.evaluate(verbose=True, makeplots=True, savedir=saveDir, team_name=teamName)
     with PdfPages('%s/summary.pdf'%saveDir) as pdf:
         # plot specialized analysis of keypoint estimation errors
-        analysisAPI.errorsAUCImpact( coco_analyze, saveDir, pdf )
-        #analysisAPI.localizationKeypointBreakdown( coco_analyze, saveDir, pdf )
-        #analysisAPI.localizationAUCImpact( coco_analyze, saveDir, pdf )
+        #analysisAPI.errorsAUCImpact( coco_analyze, saveDir, pdf )
+        analysisAPI.localizationKeypointBreakdown( coco_analyze, saveDir, pdf )
         #analysisAPI.localizationOKSImpact( coco_analyze, .75, saveDir, pdf )
-        #analysisAPI.scoringAUCImpact( coco_analyze, saveDir, pdf )
-        #analysisAPI.backgroundAUCImpact( coco_analyze, saveDir )
         #analysisAPI.backgroundCharacteristics( coco_analyze, .5, imgs_info, saveDir )
         #analysisAPI.occlusionAndCrowdingSensitivity( coco_analyze, .75, saveDir )
         #analysisAPI.sizeSensitivity( coco_analyze, .75, saveDir )
