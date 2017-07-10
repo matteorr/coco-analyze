@@ -1,7 +1,7 @@
 # folders from this repo
-annotations/
+#annotations/
 results/
-detections/
+#detections/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
