@@ -87,6 +87,9 @@ def main():
     template_vars['overall_prc_large']  = '%s/prc_[%s][large][%d].pdf'%(saveDir,teamName,coco_analyze.params.maxDets[0])
     template_vars['overall_prc_all']    = '%s/prc_[%s][all][%d].pdf'%(saveDir,teamName,coco_analyze.params.maxDets[0])
 
+    ############################################################################
+    # COMMENT OUT ANY OF THE BELOW TO SKIP FROM ANALYSIS
+
     # analyze imapct on AP of all error types
     paths = errorsAPImpact( coco_analyze, saveDir )
     template_vars.update(paths)
