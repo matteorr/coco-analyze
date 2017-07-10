@@ -104,7 +104,7 @@ class COCOanalyze:
 
     def find_keypoint_errors(self):
         tic = time.time()
-        print('<{}:{}>Analyzing keypoint errors...'.format(__author__,__version__))
+        print('Analyzing keypoint errors...')
         # find all matches between dts and gts at the lowest iou thresh
         # allowed for localization. Matches with lower oks are not valid
         oksLocThrs = [self.params.oksLocThrs]
@@ -113,10 +113,10 @@ class COCOanalyze:
         dtMatches, gtMatches = self._find_dt_gt_matches(oksLocThrs, areaRng, areaRngLbl)
 
         for aind, arearnglbl in enumerate(areaRngLbl):
-            self.localization_matches[arearnglbl, self.params.oksLocThrs, 'dts'] = \
-                dtMatches[arearnglbl, self.params.oksLocThrs]
-            self.localization_matches[arearnglbl, self.params.oksLocThrs, 'gts'] = \
-                gtMatches[arearnglbl, self.params.oksLocThrs]
+            self.localization_matches[arearnglbl, str(self.params.oksLocThrs), 'dts'] = \
+                dtMatches[arearnglbl, str(self.params.oksLocThrs)]
+            self.localization_matches[arearnglbl, str(self.params.oksLocThrs), 'gts'] = \
+                gtMatches[arearnglbl, str(self.params.oksLocThrs)]
 
         # find which errors affect the oks of detections that are matched
         corrected_dts = self._find_kpt_errors()
@@ -138,7 +138,7 @@ class COCOanalyze:
                     cdt['swap']          = corrected_dts_dict[cdt['id']]['swap']
 
         toc = time.time()
-        print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc-tic))
 
     def _find_dt_gt_matches(self, oksThrs, areaRng, areaRngLbl):
         self.cocoEval.params.areaRng    = areaRng
@@ -197,8 +197,8 @@ class COCOanalyze:
                             else:
                                 gtMatchesAreaOks[gid] = [entry]
 
-                dtMatches[arearnglbl,oks] = dtMatchesAreaOks
-                gtMatches[arearnglbl,oks] = gtMatchesAreaOks
+                dtMatches[arearnglbl,str(oks)] = dtMatchesAreaOks
+                gtMatches[arearnglbl,str(oks)] = gtMatchesAreaOks
         return dtMatches, gtMatches
 
     def _find_kpt_errors(self):
@@ -209,7 +209,7 @@ class COCOanalyze:
         areaRngLbls = self.params.areaRngLbl
 
         for aind, areaRngLbl in enumerate(areaRngLbls):
-            localization_matches_dts = self.localization_matches[areaRngLbl, oksLocThrs, 'dts']
+            localization_matches_dts = self.localization_matches[areaRngLbl, str(oksLocThrs), 'dts']
             corrected_dts[areaRngLbl] = []
             # this contains all the detections that have been matched with a gt
             for did in localization_matches_dts:
@@ -405,7 +405,7 @@ class COCOanalyze:
 
     def find_score_errors(self):
         tic = time.time()
-        print('<{}:{}>Analyzing detection scores...'.format(__author__,__version__))
+        print('Analyzing detection scores...')
         # NOTE: optimal score is measures at the lowest oks evaluation thresh
         self.cocoEval.params.iouThrs = [min(self.params.oksThrs)]
         self.cocoEval.params.maxDets = self.params.teamMaxDets
@@ -452,14 +452,14 @@ class COCOanalyze:
                 cdt['max_oks']   = d['max_oks']
 
         toc = time.time()
-        print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc-tic))
 
     def _soft_nms(self, max_oks):
         _soft_nms_dts = {}
 
         variances = (self.params.sigmas * 2)**2
         for imgId in self.params.imgIds:
-            B = []; D = []
+            B = []; D = []; available = set()
             for d in self.cocoEval._dts[imgId, self.params.catIds[0]]:
                 dt = {}; dt['keypoints'] = d['keypoints']
                 dt['max_oks']   = max_oks[d['id']]
@@ -467,9 +467,10 @@ class COCOanalyze:
                 _soft_nms_dts[d['id']] = dt
                 B.append(dt)
             if len(B) == 0: continue
+
             while len(B) > 0:
-                argmax = np.argmax([dt['opt_score'] for dt in B])
-                M      = B[argmax]
+                B.sort(key=lambda k: -k['opt_score'])
+                M = B[0]
                 D.append(M); B.remove(M)
                 m_kpts =  np.array(M['keypoints'])
                 m_xs = m_kpts[0::3]; m_ys = m_kpts[1::3]
@@ -508,7 +509,7 @@ class COCOanalyze:
 
     def find_bckgd_errors(self):
         tic = time.time()
-        print('<{}:{}>Analyzing background false positives and false negatives...'.format(__author__,__version__))
+        print('Analyzing background false positives and false negatives...')
         # compute matches with current value of detections to determine new matches
         oksThrs = sorted(self.params.oksThrs)
 
@@ -521,11 +522,11 @@ class COCOanalyze:
             dtMatches, gtMatches = self._find_dt_gt_matches(oksThrs, [areaRng], [areaRngLbl])
 
             for oind, oks in enumerate(oksThrs):
-                dtMatchesAreaOks = dtMatches[areaRngLbl, oks]
-                gtMatchesAreaOks = gtMatches[areaRngLbl, oks]
+                dtMatchesAreaOks = dtMatches[areaRngLbl, str(oks)]
+                gtMatchesAreaOks = gtMatches[areaRngLbl, str(oks)]
 
-                self.bckgd_err_matches[areaRngLbl, oks, 'dts'] = dtMatches[areaRngLbl, oks]
-                self.bckgd_err_matches[areaRngLbl, oks, 'gts'] = gtMatches[areaRngLbl, oks]
+                self.bckgd_err_matches[areaRngLbl, str(oks), 'dts'] = dtMatches[areaRngLbl, str(oks)]
+                self.bckgd_err_matches[areaRngLbl, str(oks), 'gts'] = gtMatches[areaRngLbl, str(oks)]
 
                 # assert that detection and ground truth matches are consistent
                 for d in dtMatchesAreaOks:
@@ -546,17 +547,17 @@ class COCOanalyze:
                 assert(count==len(dtMatchesAreaOks))
 
                 false_pos = set([dt['id'] for dt in self._dts if dt['id'] not in dtMatchesAreaOks])
-                self.false_pos_dts[areaRngLbl, oks] = set()
+                self.false_pos_dts[areaRngLbl, str(oks)] = set()
                 for cdt in self.corrected_dts[areaRngLbl]:
-                    if cdt['id'] in false_pos: self.false_pos_dts[areaRngLbl, oks].add(cdt['id'])
+                    if cdt['id'] in false_pos: self.false_pos_dts[areaRngLbl, str(oks)].add(cdt['id'])
 
                 false_neg = set([gt for gt in self.cocoGt.getAnnIds() if gt not in gtMatchesAreaOks])
-                self.false_neg_gts[areaRngLbl, oks] = set()
+                self.false_neg_gts[areaRngLbl, str(oks)] = set()
                 for gt in self._gts:
-                    if gt['id'] in false_neg: self.false_neg_gts[areaRngLbl, oks].add(gt['id'])
+                    if gt['id'] in false_neg: self.false_neg_gts[areaRngLbl, str(oks)].add(gt['id'])
 
         toc = time.time()
-        print('<{}:{}>DONE (t={:0.2f}s).'.format(__author__,__version__,toc-tic))
+        print('DONE (t={:0.2f}s).'.format(toc-tic))
 
     def summarize(self, makeplots=False, savedir=None, team_name=None):
         '''
@@ -664,7 +665,7 @@ class COCOanalyze:
         rs_mat_kpts = np.zeros([T*E,K,A,M])
 
         for aind, arearnglbl in enumerate(self.params.areaRngLbl):
-            print('<{}:{}>Correcting area range [{}]:'.format(__author__,__version__,arearnglbl))
+            print('Correcting area range [{}]:'.format(arearnglbl))
             self._cleanup()
 
             self.cocoEval.params.areaRng    = [self.params.areaRng[aind]]
@@ -672,7 +673,7 @@ class COCOanalyze:
             corrected_dts = self.corrected_dts[arearnglbl]
             # compute performance after solving for each error type
             for eind, err in enumerate(err_types):
-                print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,err))
+                print('Correcting error type [{}]:'.format(err))
                 tind_start = T * eind
                 tind_end   = T * (eind+1)
 
@@ -717,8 +718,8 @@ class COCOanalyze:
         rs_mat_score = np.zeros([T,K,A,M])
 
         for aind, arearnglbl in enumerate(self.params.areaRngLbl):
-            print('<{}:{}>Correcting area range [{}]:'.format(__author__,__version__,arearnglbl))
-            print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,"score"))
+            print('Correcting area range [{}]:'.format(arearnglbl))
+            print('Correcting error type [{}]:'.format("score"))
             self._cleanup()
 
             self.cocoEval.params.areaRng    = [self.params.areaRng[aind]]
@@ -746,8 +747,8 @@ class COCOanalyze:
         rs_mat_false_neg = np.zeros([T,K,A,M])
 
         for aind, arearnglbl in enumerate(self.params.areaRngLbl):
-            print('<{}:{}>Correcting area range [{}]:'.format(__author__,__version__,arearnglbl))
-            print('<{}:{}>Correcting error type [{}]:'.format(__author__,__version__,"bckgd. fp, fn"))
+            print('Correcting area range [{}]:'.format(arearnglbl))
+            print('Correcting error type [{}]:'.format("bckgd. fp, fn"))
             self._cleanup()
 
             self.cocoEval.params.areaRng    = [self.params.areaRng[aind]]
@@ -764,7 +765,7 @@ class COCOanalyze:
                     if e is None: continue
                     for dind, dtid in enumerate(e['dtIds']):
                         # check if detection is a background false pos at this oks
-                        if dtid in self.false_pos_dts[arearnglbl,oks]:
+                        if dtid in self.false_pos_dts[arearnglbl,str(oks)]:
                             e['dtIgnore'][oind][dind] = True
                 # accumulate results after having set all this ignores
                 self.cocoEval.accumulate()
@@ -778,7 +779,7 @@ class COCOanalyze:
                 for e in self.cocoEval.evalImgs:
                     if e is None: continue
                     for gind, gtid in enumerate(e['gtIds']):
-                        if gtid in self.false_neg_gts[arearnglbl,oks]:
+                        if gtid in self.false_neg_gts[arearnglbl,str(oks)]:
                             e['gtIgnore'][gind] = 1
                 # accumulate results after having set all this ignores
                 self.cocoEval.accumulate()

@@ -449,24 +449,6 @@ class COCOeval:
 
                     tp_sum = np.cumsum(tps, axis=1).astype(dtype=np.float)
                     fp_sum = np.cumsum(fps, axis=1).astype(dtype=np.float)
-                    # dtIds  = np.concatenate([e['dtIds'][0:maxDet] for e in E])[:,inds]
-                    # print len(gtIg)
-                    # print fps.shape
-                    # idxsfp = []
-                    # for iii,f in enumerate(fps[0,:]):
-                    #     if f == True:
-                    #         idxsfp.append(iii)
-                    #
-                    # print tp_sum
-                    # print fp_sum
-                    # print len(idxsfp)
-                    # if len(idxsfp) < 200:
-                    #     for iii in idxsfp:
-                    #         print "==============="
-                    #         print dtIds[iii]
-                    #         print dtm[0,iii]
-                    #         print dtIg[0,iii]
-                    #         print gtIg[iii]
                     for t, (tp, fp) in enumerate(zip(tp_sum, fp_sum)):
                         tp = np.array(tp)
                         fp = np.array(fp)
@@ -484,6 +466,8 @@ class COCOeval:
                         # use python array gets significant speed improvement
                         pr = pr.tolist(); q = q.tolist()
 
+                        # interpolated precision is used. The interpolated precision
+                        # is defined as the maximum precision for a given recall level and onwards.
                         for i in range(nd-1, 0, -1):
                             if pr[i] > pr[i-1]:
                                 pr[i-1] = pr[i]
@@ -510,9 +494,6 @@ class COCOeval:
         Compute and display summary metrics for evaluation results.
         Note this functin can *only* be applied on the default parameter setting
         '''
-        # print('[DEBUG]<{}:{}>\n - iouThrs:{}\n - maxDets:{}\n - areaRng:{}'.format(
-        # __author__,__version__,self.params.iouThrs,self.params.maxDets,self.params.areaRng))
-
         def _summarize( ap=1, iouThr=None, areaRng='all', maxDets=100 ):
             p = self.params
 

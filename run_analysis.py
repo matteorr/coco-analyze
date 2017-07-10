@@ -1,23 +1,48 @@
-## imports
-import os, sys, json
-from matplotlib.backends.backend_pdf import PdfPages
+## general imports
+import os, sys, json, datetime, jinja2
+from jinja2 import Template
+
 ## COCO imports
 from pycocotools.coco import COCO
 from pycocotools.cocoanalyze import COCOanalyze
+
 ## Analysis API imports
-import analysisAPI
-import datetime
+from analysisAPI.errorsAPImpact import errorsAPImpact
+from analysisAPI.localizationErrors import localizationErrors
+from analysisAPI.scoringErrors import scoringErrors
+from analysisAPI.backgroundFalsePosErrors import backgroundFalsePosErrors
+from analysisAPI.backgroundFalseNegErrors import backgroundFalseNegErrors
+from analysisAPI.occlusionAndCrowdingSensitivity import occlusionAndCrowdingSensitivity
+from analysisAPI.sizeSensitivity import sizeSensitivity
 
 def main():
-    if len(sys.argv) != 5:
-        raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [results_path] [save_dir] [team_name]")
+    if len(sys.argv) != 6:
+        raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [results_path] [save_dir] [team_name] [version_name]")
 
-    annFile  = sys.argv[1]; resFile  = sys.argv[2]
+    latex_jinja_env = jinja2.Environment(
+        block_start_string    = '\BLOCK{',
+        block_end_string      = '}',
+        variable_start_string = '\VAR{',
+        variable_end_string   = '}',
+        comment_start_string  = '\#{',
+        comment_end_string    = '}',
+        line_statement_prefix = '%%',
+        line_comment_prefix   = '%#',
+        trim_blocks           = True,
+        autoescape            = False,
+        loader                = jinja2.FileSystemLoader(os.path.abspath('./latex/'))
+    )
+    template = latex_jinja_env.get_template('report_template.tex')
+    template_vars  = {}
+
+    annFile   = sys.argv[1]; splitName = annFile.split("/")[-1].replace("_", "\\_")
+    resFile  = sys.argv[2]
     print("{:10}[{}]\n{:10}[{}]".format('annFile:',annFile,'resFile:',resFile))
     saveDir  = sys.argv[3]
     if not os.path.exists(saveDir):
         os.makedirs(saveDir)
-    teamName = sys.argv[4]
+    teamName    = sys.argv[4]
+    versionName = sys.argv[5]
 
     ## create dictionary with all images info
     gt_data   = json.load(open(annFile,'rb'))
@@ -27,40 +52,28 @@ def main():
                            for i in gt_data['images']}
 
     ## load team detections
-    team_dts = json.load(open(resFile,'rb'))
-    team_dts = [d for d in team_dts if d['image_id'] in imgs_info]
-    team_img_ids = set([d['image_id'] for d in team_dts])
-    team_dts_dict = {}
-    for d in team_dts:
-        if d['image_id'] in team_dts_dict:
-            team_dts_dict[d['image_id']].append(d)
-        else:
-            team_dts_dict[d['image_id']] = [d]
-    pruned_team_dts = []
-    for iid in team_dts_dict:
-        pruned_team_dts.extend(sorted(team_dts_dict[iid], key=lambda k: -k['score'])[:20])
-    team_dts = pruned_team_dts
-    print("Loaded [{}] detections from [{}] images.".format(len(team_dts),len(imgs_info)))
-    # # suppress the detections to be only 20 per image
-    # team_img_dts = {}
-    # for d in team_dts:
-    #     if d['image_id'] in team_img_dts:
-    #         team_img_dts[d['image_id']].append(d)
-    #     else:
-    #         team_img_dts[d['image_id']] = [d]
-    # print len(team_img_dts)
-    # suppressed_team_dts = []
-    # for i in team_img_dts:
-    #     top_dts = sorted(team_img_dts[i], key=lambda k: -k['score'])
-    #     assert(top_dts[0]['score']>=top_dts[-1]['score'])
-    #     suppressed_team_dts.extend(top_dts[:20])
-    # print("Loaded [{}] instances in [{}] images.".format(len(suppressed_team_dts),len(imgs_info)))
+    dt_data  = json.load(open(resFile,'rb'))
+    team_dts = {}
+    for d in dt_data:
+        if d['image_id'] in team_dts: team_dts[d['image_id']].append(d)
+        else: team_dts[d['image_id']] = [d]
+    team_split_dts = []
+    for img_id in team_dts:
+        if img_id in imgs_info:
+            team_split_dts.extend(sorted(team_dts[img_id], key=lambda k: -k['score'])[:20])
+    print("Loaded [{}] detections from [{}] images.".format(len(team_split_dts),len(imgs_info)))
+    template_vars['team_name']    = teamName
+    template_vars['version_name'] = versionName
+    template_vars['split_name']   = splitName
+    template_vars['num_dts']      = len(team_split_dts)
+    template_vars['num_imgs_dts'] = len(set([d['image_id'] for d in team_split_dts]))
+    template_vars['num_imgs']     = len(imgs_info)
 
     ## load ground truth annotations
     coco_gt = COCO( annFile )
 
     ## initialize COCO detections api
-    coco_dt   = coco_gt.loadRes( team_dts )
+    coco_dt   = coco_gt.loadRes( team_split_dts )
 
     ## initialize COCO analyze api
     coco_analyze = COCOanalyze(coco_gt, coco_dt, 'keypoints')
@@ -68,23 +81,43 @@ def main():
         imgIds  = sorted(coco_gt.getImgIds())[0:100]
         coco_analyze.cocoEval.params.imgIds = imgIds
 
-    #coco_analyze.evaluate(verbose=True, makeplots=True, savedir=saveDir, team_name=teamName)
-    with PdfPages('%s/summary.pdf'%saveDir) as pdf:
-        # plot specialized analysis of keypoint estimation errors
-        #analysisAPI.errorsAUCImpact( coco_analyze, saveDir, pdf )
-        analysisAPI.localizationKeypointBreakdown( coco_analyze, saveDir, pdf )
-        #analysisAPI.localizationOKSImpact( coco_analyze, .75, saveDir, pdf )
-        #analysisAPI.backgroundCharacteristics( coco_analyze, .5, imgs_info, saveDir )
-        #analysisAPI.occlusionAndCrowdingSensitivity( coco_analyze, .75, saveDir )
-        #analysisAPI.sizeSensitivity( coco_analyze, .75, saveDir )
+    ## regular evaluation
+    coco_analyze.evaluate(verbose=True, makeplots=True, savedir=saveDir, team_name=teamName)
+    template_vars['overall_prc_medium'] = '%s/prc_[%s][medium][%d].pdf'%(saveDir,teamName,coco_analyze.params.maxDets[0])
+    template_vars['overall_prc_large']  = '%s/prc_[%s][large][%d].pdf'%(saveDir,teamName,coco_analyze.params.maxDets[0])
+    template_vars['overall_prc_all']    = '%s/prc_[%s][all][%d].pdf'%(saveDir,teamName,coco_analyze.params.maxDets[0])
 
-        d = pdf.infodict()
-        d['Title']        = ''
-        d['Author']       = ''
-        d['Subject']      = ''
-        d['Keywords']     = ''
-        d['CreationDate'] = datetime.datetime.today()
-        d['ModDate']      = datetime.datetime.today()
+    # analyze imapct on AP of all error types
+    paths = errorsAPImpact( coco_analyze, saveDir )
+    template_vars.update(paths)
+
+    ## analyze breakdown of localization errors
+    paths = localizationErrors( coco_analyze, saveDir )
+    template_vars.update(paths)
+
+    ## analyze scoring errors
+    paths = scoringErrors( coco_analyze, .75, imgs_info, saveDir )
+    template_vars.update(paths)
+
+    # analyze background false positives
+    paths = backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir )
+    template_vars.update(paths)
+
+    ## analyze background false negatives
+    paths = backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir )
+    template_vars.update(paths)
+
+    ## analyze sensitivity to occlusion and crowding of instances
+    paths = occlusionAndCrowdingSensitivity( coco_analyze, .75, saveDir )
+    template_vars.update(paths)
+
+    ## analyze sensitivity to size of instances
+    paths = sizeSensitivity( coco_analyze, .75, saveDir )
+    template_vars.update(paths)
+
+    output_report = open('./%s_performance_report.tex'%teamName, 'w')
+    output_report.write( template.render(template_vars) )
+    output_report.close()
 
 if __name__ == '__main__':
     main()
