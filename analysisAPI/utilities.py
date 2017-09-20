@@ -28,7 +28,7 @@ def show_dets(coco_dts, coco_gts, img_info, save_path=None):
     if len(coco_dts) == 0 and len(coco_gts)==0:
         return 0
 
-    I = io.imread('http://mscoco.org/images/%d'%(img_info['id']))
+    I = io.imread(img_info['coco_url'])
     plt.figure(figsize=(10,10)); plt.axis('off')
     plt.imshow(I)
     ax = plt.gca(); ax.set_autoscale_on(False)

@@ -17,7 +17,7 @@ from analysisAPI.sizeSensitivity import sizeSensitivity
 
 def main():
     if len(sys.argv) != 6:
-        raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [results_path] [save_dir] [team_name] [version_name]")
+        raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [detections_path] [save_dir] [team_name] [version_name]")
 
     latex_jinja_env = jinja2.Environment(
         block_start_string    = '\BLOCK{',
@@ -46,10 +46,11 @@ def main():
 
     ## create dictionary with all images info
     gt_data   = json.load(open(annFile,'rb'))
-    imgs_info = {i['id']:{'id':i['id'] ,
-                          'width':i['width'],
-                          'height':i['height']}
-                           for i in gt_data['images']}
+    imgs_info = {i['id']:{'id'      :i['id'] ,
+                          'width'   :i['width'],
+                          'height'  :i['height'],
+                          'coco_url':i['coco_url']}
+                 for i in gt_data['images']}
 
     ## load team detections
     dt_data  = json.load(open(resFile,'rb'))
@@ -90,19 +91,19 @@ def main():
     ############################################################################
     # COMMENT OUT ANY OF THE BELOW TO SKIP FROM ANALYSIS
 
-    # analyze imapct on AP of all error types
+    ## analyze imapct on AP of all error types
     paths = errorsAPImpact( coco_analyze, saveDir )
     template_vars.update(paths)
 
     ## analyze breakdown of localization errors
-    paths = localizationErrors( coco_analyze, saveDir )
+    paths = localizationErrors( coco_analyze, imgs_info, saveDir )
     template_vars.update(paths)
 
     ## analyze scoring errors
     paths = scoringErrors( coco_analyze, .75, imgs_info, saveDir )
     template_vars.update(paths)
 
-    # analyze background false positives
+    ## analyze background false positives
     paths = backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir )
     template_vars.update(paths)
 

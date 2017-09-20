@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import skimage.io as io
 import utilities
 
-def localizationErrors( coco_analyze, saveDir ):
+def localizationErrors( coco_analyze, imgs_info, saveDir ):
     loc_dir = saveDir + '/localization_errors/keypoints_breakdown'
     if not os.path.exists(loc_dir):
         os.makedirs(loc_dir)
@@ -159,7 +159,7 @@ def localizationErrors( coco_analyze, saveDir ):
         top_err_dts = sorted(top_err_dts, key=lambda k: -sum(k[err]))
 
         for tind, t in enumerate(top_err_dts[0:7]):
-            I = io.imread('http://mscoco.org/images/%d'%(t['image_id']))
+            I = io.imread(imgs_info[t['image_id']]['coco_url'])
             plt.figure(figsize=(10,10)); plt.axis('off')
             plt.imshow(I)
             ax = plt.gca()
