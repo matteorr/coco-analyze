@@ -7,6 +7,11 @@ This repository contains the code release from the paper [***Benchmarking and Er
  - `analysisAPI`: API using COCOanalyze for an extended analysis.
  - `run_analysis.py`: script generating a pdf summary of the extended analysis.
 
+### Installation
+Use the Makefile to install the coco-analyze api:
+ - `make all` will compile and install locally. (<b>RECOMMENDED</b>)
+ - `make install` will install the api to the Python site-packages folder. <b>NOTE</b> This might override your current pycocotools installation.
+
 ### Usage
 To run the extended multi-instance keypoint estimation error analysis: update the paths of the detections and annotations and execute the command line.
 
