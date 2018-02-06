@@ -19,9 +19,12 @@ def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
     coco_analyze.params.areaRngLbl = [arearangelabel]
     coco_analyze.params.err_types = ['miss','swap','inversion','jitter']
 
+    # the values below can be changed based on the desired grouping for
+    # the analysis of the number of overlaps and number of keypoints 
     IOU_FOR_OVERLAP = .1
     overlap_groups  = [[0],[1,2],[3,4,5,6,7,8]]
     num_kpt_groups  = [[1,2,3,4,5],[6,7,8,9,10],[11,12,13,14,15],[16,17]]
+
     coco_gt         = coco_analyze.cocoGt
     image_ids       = coco_gt.getImgIds()
     coco_gt_ids     = coco_gt.getAnnIds()
@@ -46,14 +49,30 @@ def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
         benchmark_overlap[ind]['groups'] = og
         total_gts = []
         for no in og:
-            total_gts += overlap_index[no]
+            if no in overlap_index:
+                # there are `overlap_index[no]` annotations in the dataset that
+                # have `no` overlapping annotations with IOU larger than `IOU_FOR_OVERLAP`
+                total_gts += overlap_index[no]
+            else:
+                # if the dataset does not contain annotations overlapping with `no`  
+                # other annotations the dictionary `overlap_index` will not contain
+                # a key with the value specified in the `overlap_groups` list above
+                pass
         benchmark_overlap[ind]['gtIds'] = total_gts
     for ind, nkg in enumerate(num_kpt_groups):
         benchmark_keypoint[ind] = {}
         benchmark_keypoint[ind]['groups'] = nkg
         total_gts = []
         for nk in nkg:
-            total_gts += keypoints_index[nk]
+            if nk in keypoints_index:
+                # there are `keypoints_index[nk]` annotations in the dataset that
+                # have `nk` number of visible keypoints
+                total_gts += keypoints_index[nk]
+            else:
+                # if the dataset does not contain annotations with `nk` number of   
+                # visible keypoints the dictionary `keypoints_index` will not contain
+                # a key with the value specified in the `num_kpt_groups` list above
+                pass
         benchmark_keypoint[ind]['gtIds'] = total_gts
 
     f.write("Benchmark Dimensions:\n")
