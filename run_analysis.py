@@ -35,7 +35,7 @@ def main():
     template = latex_jinja_env.get_template('report_template.tex')
     template_vars  = {}
 
-    annFile   = sys.argv[1]; splitName = annFile.split("/")[-1].replace("_", "\\_")
+    annFile   = sys.argv[1]; splitName = annFile.split("/")[-1]
     resFile  = sys.argv[2]
     print("{:10}[{}]\n{:10}[{}]".format('annFile:',annFile,'resFile:',resFile))
     saveDir  = sys.argv[3]
