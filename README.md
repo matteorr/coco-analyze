@@ -1,7 +1,7 @@
 ## coco-analyze Repository
 This repository contains the code release from the paper [***Benchmarking and Error Diagnosis in Multi-Instance Pose Estimation***](http://www.vision.caltech.edu/~mronchi/projects/PoseErrorDiagnosis).
 
-If you find our work useful please cite our paper:
+If you find this work useful please cite our paper:
 ```
 @InProceedings{Ronchi_2017_ICCV,
 author = {Ronchi, Matteo Ruggero and Perona, Pietro},
