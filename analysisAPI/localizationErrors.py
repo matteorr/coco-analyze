@@ -152,6 +152,9 @@ def localizationErrors( coco_analyze, imgs_info, saveDir ):
         plt.savefig(paths[path], bbox_extra_artists=(lgd,), bbox_inches='tight')
         plt.close()
 
+    ############################################################################
+    ## PLOT THE TOP DETECTIONS WITH ERRORS OF EACH TYPE
+    USE_VISIBILITY_FOR_PLOTS = False
     for err in ['miss','swap','inversion','jitter']:
         f.write("\nTop errors of type [%s]:\n"%(err))
         err_dts = [d for d in coco_analyze.corrected_dts['all'] if err in d]
@@ -159,31 +162,74 @@ def localizationErrors( coco_analyze, imgs_info, saveDir ):
         top_err_dts = sorted(top_err_dts, key=lambda k: -sum(k[err]))
 
         for tind, t in enumerate(top_err_dts[0:7]):
+            sks = np.array(utilities.skeleton)-1
+            kp = np.array(t['keypoints'])
+            x = kp[0::3]; y = kp[1::3]; v = kp[2::3]
+
+            # show the image
             I = io.imread(imgs_info[t['image_id']]['coco_url'])
             plt.figure(figsize=(10,10)); plt.axis('off')
             plt.imshow(I)
             ax = plt.gca()
             ax.set_autoscale_on(False)
-            bbox = t['bbox']
+
+            # get the bounding box only based on the visible keypoints
+            if USE_VISIBILITY_FOR_PLOTS:
+                xs = x[v!=0]
+                ys = y[v!=0]
+                x_min = min(xs); x_max = max(xs)
+                y_min = min(ys); y_max = max(ys)
+                bbox = [x_min, y_min, x_max - x_min, y_max - y_min]
+            else:
+                bbox = t['bbox']
+            # plot the bounding box
             rect = plt.Rectangle((bbox[0],bbox[1]),bbox[2],bbox[3],fill=False,edgecolor=[1, .6, 0],linewidth=3)
             ax.add_patch(rect)
-            sks = np.array(utilities.skeleton)-1
-            kp = np.array(t['keypoints'])
-            x = kp[0::3]
-            y = kp[1::3]
+
+            if USE_VISIBILITY_FOR_PLOTS:
+                err_str = "Visibilty flags can only be 0, 1, 2."
+                c_0 = len([iii for iii in v if iii==0])
+                c_1 = len([iii for iii in v if iii==1])
+                c_2 = len([iii for iii in v if iii==2])
+                assert c_0 + c_1 + c_2 == 17, err_str
+
             for sk in sks:
-                plt.plot(x[sk],y[sk], linewidth=3, color=utilities.colors[sk[0],sk[1]])
+                if USE_VISIBILITY_FOR_PLOTS and v[sk[0]] * v[sk[1]] == 0:
+                    # don't plot the skeleton link if either of the two connecting
+                    # keypoints has Visibilty flag == 0 and USE_VISIBILITY_FOR_PLOTS == True
+                    pass
+                else:
+                    plt.plot(x[sk],y[sk], linewidth=3, color=utilities.colors[sk[0],sk[1]])
 
             for kk in xrange(17):
                 if kk in [1,3,5,7,9,11,13,15]:
-                    plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='r',
-                                                  markeredgecolor='r', markeredgewidth=3)
+                    if USE_VISIBILITY_FOR_PLOTS and v[kk] == 0:
+                        # don't plot the keypoints if it has Visibilty flag == 0
+                        # and USE_VISIBILITY_FOR_PLOTS == True
+                        pass
+                    else:
+                        # these are the indices of the left keypoints (in red)
+                        plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='r',
+                                                      markeredgecolor='r', markeredgewidth=3)
+
                 elif kk in [2,4,6,8,10,12,14,16]:
-                    plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='g',
-                                                  markeredgecolor='g', markeredgewidth=3)
+                    if USE_VISIBILITY_FOR_PLOTS and v[kk] == 0:
+                        # don't plot the keypoints if it has Visibilty flag == 0
+                        # and USE_VISIBILITY_FOR_PLOTS == True
+                        pass
+                    else:
+                        # these are the indices of the right keypoints (in green)
+                        plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='g',
+                                                      markeredgecolor='g', markeredgewidth=3)
                 else:
-                    plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='b',
-                                                  markeredgecolor='b', markeredgewidth=3)
+                    if USE_VISIBILITY_FOR_PLOTS and v[kk] == 0:
+                        # don't plot the keypoints if it has Visibilty flag == 0
+                        # and USE_VISIBILITY_FOR_PLOTS == True
+                        pass
+                    else:
+                        # these are the indices of the remaining keypoints (in blue)
+                        plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='b',
+                                                      markeredgecolor='b', markeredgewidth=3)
 
             title = "[%d][%d][%.3f][%d]"%(t['image_id'],t['id'],t['score'],sum(t[err]))
             f.write("%s\n"%title)
