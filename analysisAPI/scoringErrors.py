@@ -180,7 +180,7 @@ def scoringErrors( coco_analyze, oks, imgs_info, saveDir ):
                 other_dt_opt_score_hist.extend([k[1][2] for k in oks_vals[1:]])
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.hist(num_dts_high_oks,bins=[i-.5 for i in xrange(max(num_dts_high_oks)+1)],color='green')
     plt.grid()
     plt.xticks([i for i in xrange(max(num_dts_high_oks))])

@@ -46,7 +46,7 @@ def sizeSensitivity( coco_analyze, oks, saveDir ):
         f.write("%d) %s-%s: %d\n"%(i,areaRngLbls[i],a,len(size_index[areaRngLbls[i]])))
 
     fig, ax = plt.subplots(figsize=(6,6))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     x = [1,2,3,4]
     y = [len(size_index['medium']), len(size_index['large']), len(size_index['xlarge']), len(size_index['xxlarge'])]
     plt.bar(x,y,color='g',align='center')
@@ -113,7 +113,7 @@ def sizeSensitivity( coco_analyze, oks, saveDir ):
     perf_bk_fn = size_performance['false_neg']
 
     fig, ax = plt.subplots(figsize=(20,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.ylabel("AP Improvement",fontsize=20)
     plt.title("Error Sensitivity over size @ OKS Eval Thresh=%.2f"%oks,fontsize=20)
 
@@ -172,7 +172,7 @@ def sizeSensitivity( coco_analyze, oks, saveDir ):
     plt.close()
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.ylabel("AP",fontsize=20)
     plt.title("AP Sensitivity over size @ OKS Eval Thresh=%.2f"%oks,fontsize=20)
     x = [1,2,3,4]

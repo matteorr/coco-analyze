@@ -58,7 +58,7 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
     f.write(" - 80th perc. score:[%.3f]; num. dts:[%d]\n"%(p_80,len([d for d in coco_analyze.corrected_dts['all'] if d['score']<=p_80])))
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     bins = [min(a),p_20,p_40,p_60,p_80,max(a)]
     plt.hist([d['score'] for d in sorted_fps],bins=bins,color='b')
     plt.xticks(bins,['','20th%','40th%','60th%','80th%',''],rotation='vertical')
@@ -193,7 +193,7 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
     plt.close()
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.bar(xrange(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
     plt.xticks(xrange(5),areaRngLbls)
     plt.grid()
@@ -204,7 +204,7 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
     plt.close()
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.bar(xrange(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
     plt.xticks(xrange(5),num_people_labels)
     plt.grid()

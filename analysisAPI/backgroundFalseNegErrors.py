@@ -212,7 +212,7 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
     plt.close()
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.bar(xrange(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
     plt.xticks(xrange(5),areaRngLbls)
     plt.grid()
@@ -223,7 +223,7 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
     plt.close()
 
     fig, ax = plt.subplots(figsize=(10,10))
-    ax.set_axis_bgcolor('lightgray')
+    ax.set_facecolor('lightgray')
     plt.bar(xrange(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
     plt.xticks(xrange(5),num_people_labels)
     plt.grid()
