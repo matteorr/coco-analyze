@@ -1,6 +1,17 @@
 ## coco-analyze Repository
 This repository contains the code release from the paper [***Benchmarking and Error Diagnosis in Multi-Instance Pose Estimation***](http://www.vision.caltech.edu/~mronchi/projects/PoseErrorDiagnosis).
 
+If you find our work useful please cite our paper:
+```
+@InProceedings{Ronchi_2017_ICCV,
+author = {Ronchi, Matteo Ruggero and Perona, Pietro},
+title = {Benchmarking and Error Diagnosis in Multi-Instance Pose Estimation},
+booktitle = {The IEEE International Conference on Computer Vision (ICCV)},
+month = {Oct},
+year = {2017}
+}
+```
+
 ### Important Content:
  - `pycocotools/COCOanalyze.py`: wrapper of the COCOeval class for multi-instance keypoint estimation error analysis.
  - `COCOanalyze_demo.ipynb`: ipython notebook showing how to use COCOanalyze as a standalone class.
