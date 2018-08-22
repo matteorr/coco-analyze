@@ -248,14 +248,20 @@ class COCOanalyze:
                 image_anns = self.cocoGt.loadAnns(self.cocoGt.getAnnIds(imgIds=image_id))
                 num_anns   = len(image_anns)
 
-                # create a matrix with all keypoints from gts in the image
-                # dimensions are (2n, 34), 34 for x and y coordinates of kpts
-                # 2n for both the original and inverted gt vectors
+                # create a matrix containing 2 * n rows where n is the number of
+                # annotations in the image and 2 * n keypoints for x and y coords:
+                # - n for all the ground truth with original keypoints
+                # - n for all the ground truth with inverted keypoints
                 gts_kpt_mat = np.zeros((2*num_anns, 2*self.params.num_kpts))
+                # keep track of the visibility flags
                 vflags      = np.zeros((2*num_anns, self.params.num_kpts))
+                # keep track of the area of all annotations
                 areas       = np.zeros(2*num_anns)
-                indx        = 1
 
+                # start filling the matrix from row 1 cause row 0 is reserved for
+                # the ground truth that is matched with the current detection being
+                # analyzed
+                indx        = 1
                 for a in image_anns:
                     # get the keypoint vector and its inverted version
                     xs = np.array(a['keypoints'][0::3])
@@ -263,43 +269,51 @@ class COCOanalyze:
                     vs = np.array(a['keypoints'][2::3])
                     inv_vs = vs[self.params.inv_idx]
 
-                    keypoints     = np.insert(ys, np.arange(self.params.num_kpts), xs)
-                    inv_keypoints = np.insert(ys[self.params.inv_idx],
+                    keypoints     = np.insert(ys.astype(np.float),
                                               np.arange(self.params.num_kpts),
-                                              xs[self.params.inv_idx])
+                                              xs.astype(np.float))
+                    inv_keypoints = np.insert(ys[self.params.inv_idx].astype(np.float),
+                                              np.arange(self.params.num_kpts),
+                                              xs[self.params.inv_idx].astype(np.float))
 
-                    # check if it is the ground truth match, if so put at index 0 and n
                     if a['id']==gt['id']:
+                        # if current annotation is the ground truth match
+                        # fill in all the above matrices at index 0 and num_anns
                         areas[0]                = a['area']
                         areas[num_anns]         = a['area']
+
                         gts_kpt_mat[0,:]        = keypoints
                         gts_kpt_mat[num_anns,:] = inv_keypoints
 
-                        vflags[0,:]        = vs
-                        vflags[num_anns,:] = inv_vs
+                        vflags[0,:]             = vs
+                        vflags[num_anns,:]      = inv_vs
 
                     else:
+                        # if current annotation is NOT the ground truth match
+                        # fill in all the above matrices at index "indx" and indx + num_anns
                         areas[indx]                  = a['area']
                         areas[indx+num_anns]         = a['area']
+
                         gts_kpt_mat[indx,:]          = keypoints
                         gts_kpt_mat[indx+num_anns,:] = inv_keypoints
 
-                        vflags[indx,:]          = vs
-                        vflags[indx+num_anns,:] = inv_vs
+                        vflags[indx,:]               = vs
+                        vflags[indx+num_anns,:]      = inv_vs
 
+                        # increase the index for storing the next annotation info
                         indx += 1
 
                 # compute OKS of every individual dt keypoint with corresponding gt
                 dist = gts_kpt_mat - dt_kpt_arr
-                sqrd_dist = np.add.reduceat(np.square(dist), range(0,2*self.params.num_kpts,2),axis=1)
+                sqrd_dist = np.add.reduceat(np.square(dist), range(0,2*self.params.num_kpts,2), axis=1)
 
+                # get the keypoint similarity between every individual keypoint
+                # detection and its corresponding ground truth location
                 kpts_oks_mat = \
-                  np.exp( -sqrd_dist / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 ) * (vflags>0) +\
-                  -1 * (vflags==0)
+                  np.exp( -sqrd_dist / (self.params.sigmas*2)**2 / (areas[:,np.newaxis]+np.spacing(1)) / 2 ) * (vflags>0) - 1 * (vflags==0)
                 div = np.sum(vflags>0,axis=1)
                 div[div==0] = self.params.num_kpts
-                oks_mat = (np.sum(kpts_oks_mat * (vflags>0), axis=1) / div) * ( np.sum(vflags>0,axis=1) > 0 ) + \
-                           -1 * ( np.sum(vflags>0,axis=1) == 0 )
+                oks_mat = (np.sum(kpts_oks_mat * (vflags>0), axis=1) / div) * ( np.sum(vflags>0,axis=1) > 0 ) - 1 * ( np.sum(vflags>0,axis=1) == 0 )
                 assert(np.isclose(oks_mat[0],dtm['oks'],atol=1e-08))
 
                 # NOTE: if a 0 or a -1 appear in the oks_max array it doesn't matter
