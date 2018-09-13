@@ -73,7 +73,7 @@ def show_dets(coco_dts, coco_gts, img_info, save_path=None):
         for sk in sks:
             plt.plot(x[sk],y[sk], linewidth=3, color=colors[sk[0],sk[1]])
 
-        for kk in xrange(17):
+        for kk in range(17):
             if kk in [1,3,5,7,9,11,13,15]:
                 plt.plot(x[kk], y[kk],'o',markersize=5, markerfacecolor='r',
                                               markeredgecolor='r', markeredgewidth=3)
@@ -194,8 +194,8 @@ def compute_ious(anns):
     num_boxes = len(anns)
     ious = np.zeros((num_boxes, num_boxes))
 
-    for i in xrange(num_boxes):
-        for j in xrange(i,num_boxes):
+    for i in range(num_boxes):
+        for j in range(i,num_boxes):
             ious[i,j] = compute_iou(anns[i]['bbox'],anns[j]['bbox'])
             if i!=j:
                 ious[j,i] = ious[i,j]

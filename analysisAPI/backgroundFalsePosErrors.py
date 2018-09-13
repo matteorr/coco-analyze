@@ -89,7 +89,7 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
     ar_pic_2 = np.zeros((30,30))
     ar_bins = range(10)+range(10,100,10)+range(100,1000,100)+[1000]
     ar_pic_3 = np.zeros((10,10))
-    ar_bins_3 = [np.power(2,x) for x in xrange(11)]
+    ar_bins_3 = [np.power(2,x) for x in range(11)]
 
     areaRngs    = [[0, 32 ** 2],[32 ** 2, 64 ** 2],[64 ** 2, 96 ** 2],[96 ** 2, 128 ** 2],[128 ** 2, 1e5 ** 2]]
     areaRngLbls = ['small','medium','large','xlarge','xxlarge']
@@ -105,12 +105,12 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
         ar_pic[0:t_height,0:t_width] += 1
 
         if t_width < 1024 and t_height < 1024:
-            col = [i for i in xrange(len(ar_bins)-1) if ar_bins[i]<t_width<ar_bins[i+1]]
-            row = [i for i in xrange(len(ar_bins)-1) if ar_bins[i]<t_height<ar_bins[i+1]]
+            col = [i for i in range(len(ar_bins)-1) if ar_bins[i]<t_width<ar_bins[i+1]]
+            row = [i for i in range(len(ar_bins)-1) if ar_bins[i]<t_height<ar_bins[i+1]]
             ar_pic_2[row,col] += 1
 
-            col = [i for i in xrange(len(ar_bins_3)-1) if ar_bins_3[i]<t_width<ar_bins_3[i+1]]
-            row = [i for i in xrange(len(ar_bins_3)-1) if ar_bins_3[i]<t_height<ar_bins_3[i+1]]
+            col = [i for i in range(len(ar_bins_3)-1) if ar_bins_3[i]<t_width<ar_bins_3[i+1]]
+            row = [i for i in range(len(ar_bins_3)-1) if ar_bins_3[i]<t_height<ar_bins_3[i+1]]
             ar_pic_3[row,col] += 1
         else:
             print("False Positive bbox has a side larger than 1024 pixels.")
@@ -169,8 +169,8 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     plt.imshow(ar_pic_2,origin='lower')
-    plt.xticks(xrange(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins],rotation='vertical')
-    plt.yticks(xrange(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins])
+    plt.xticks(range(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins],rotation='vertical')
+    plt.yticks(range(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins])
     plt.colorbar()
     plt.grid()
     plt.title('BBox Aspect Ratio',fontsize=20)
@@ -196,8 +196,8 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_facecolor('lightgray')
-    plt.bar(xrange(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
-    plt.xticks(xrange(5),areaRngLbls)
+    plt.bar(range(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
+    plt.xticks(range(5),areaRngLbls)
     plt.grid()
     plt.title('Histogram of Area Size',fontsize=20)
     path = "%s/bckd_false_pos_area_histogram.pdf"%(loc_dir)
@@ -207,8 +207,8 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_facecolor('lightgray')
-    plt.bar(xrange(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
-    plt.xticks(xrange(5),num_people_labels)
+    plt.bar(range(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
+    plt.xticks(range(5),num_people_labels)
     plt.grid()
     plt.title('Histogram of Num. of People in Images',fontsize=20)
     path = "%s/bckd_false_pos_num_people_histogram.pdf"%(loc_dir)

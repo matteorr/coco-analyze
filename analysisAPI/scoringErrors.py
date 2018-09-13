@@ -69,7 +69,7 @@ def scoringErrors( coco_analyze, oks, imgs_info, saveDir ):
 
         else:
             # sort the ground truths by their max oks value with any detection
-            maxoksvals = [-max(image_oks_mat[:,j]) for j in xrange(len(not_ignore_gts))]
+            maxoksvals = [-max(image_oks_mat[:,j]) for j in range(len(not_ignore_gts))]
             gtind      = np.argsort(maxoksvals, kind='mergesort')
             all_gts[imgId]      = [not_ignore_gts[j] for j in gtind]
             all_dtgt_oks[imgId] = image_oks_mat[:,gtind]
@@ -183,9 +183,9 @@ def scoringErrors( coco_analyze, oks, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_facecolor('lightgray')
-    plt.hist(num_dts_high_oks,bins=[i-.5 for i in xrange(max(num_dts_high_oks)+1)],color='green')
+    plt.hist(num_dts_high_oks,bins=[i-.5 for i in range(max(num_dts_high_oks)+1)],color='green')
     plt.grid()
-    plt.xticks([i for i in xrange(max(num_dts_high_oks))])
+    plt.xticks([i for i in range(max(num_dts_high_oks))])
     plt.title('Histogram of Detection Redundancy',fontsize=20)
     plt.xlabel('Number of Detections with OKS > .1',fontsize=20)
     plt.ylabel('Number of Ground Truth Instances',fontsize=20)

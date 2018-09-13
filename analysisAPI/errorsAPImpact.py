@@ -107,8 +107,8 @@ def errorsAPImpact( coco_analyze, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     for eind, err in enumerate(err_types):
-        errs = [np.mean([error_perf[err,'all'][i],error_perf[err,'medium'][i],error_perf[err,'large'][i]]) for i in xrange(len(oksThrs))]
-        stds = [np.std([error_perf[err,'all'][i],error_perf[err,'medium'][i],error_perf[err,'large'][i]]) for i in xrange(len(oksThrs))]
+        errs = [np.mean([error_perf[err,'all'][i],error_perf[err,'medium'][i],error_perf[err,'large'][i]]) for i in range(len(oksThrs))]
+        stds = [np.std([error_perf[err,'all'][i],error_perf[err,'medium'][i],error_perf[err,'large'][i]]) for i in range(len(oksThrs))]
         y1   = [x+y for (x,y) in zip(errs,stds)]
         y2   = [x-y for (x,y) in zip(errs,stds)]
 

@@ -203,7 +203,7 @@ def localizationErrors( coco_analyze, imgs_info, saveDir ):
                 else:
                     plt.plot(x[sk],y[sk], linewidth=3, color=utilities.colors[sk[0],sk[1]])
 
-            for kk in xrange(17):
+            for kk in range(17):
                 if kk in [1,3,5,7,9,11,13,15]:
                     if USE_VISIBILITY_FOR_PLOTS and v[kk] == 0:
                         # don't plot the keypoints if it has Visibilty flag == 0
