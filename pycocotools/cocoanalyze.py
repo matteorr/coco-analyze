@@ -2,7 +2,7 @@ __author__  = 'mrr'
 __version__ = '2.0'
 
 import numpy as np; import time; import copy
-from cocoeval import COCOeval
+from .cocoeval import COCOeval
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 plt.rcParams['xtick.labelsize'] = 16

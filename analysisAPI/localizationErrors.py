@@ -4,7 +4,9 @@ import numpy as np
 from colour import Color
 import matplotlib.pyplot as plt
 import skimage.io as io
-import utilities
+
+# package imports 
+from . import utilities
 
 def localizationErrors( coco_analyze, imgs_info, saveDir ):
     loc_dir = saveDir + '/localization_errors/keypoints_breakdown'

@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
 from scipy.misc import imresize
 import skimage.io as io
-import utilities
+
+# package imports 
+from . import utilities
 
 def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
     loc_dir = saveDir + '/background_errors/false_negatives'

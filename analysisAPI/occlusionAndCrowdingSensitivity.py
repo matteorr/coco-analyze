@@ -2,7 +2,9 @@
 import os, time
 import numpy as np
 import matplotlib.pyplot as plt
-import utilities
+
+# package imports 
+from . import utilities
 
 def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
     loc_dir = saveDir + '/benchmarks_sensitivity/occlusion_crowding'

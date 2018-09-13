@@ -2,7 +2,9 @@
 import os, time
 import numpy as np
 import matplotlib.pyplot as plt
-import utilities
+
+# package imports 
+from . import utilities
 
 def scoringErrors( coco_analyze, oks, imgs_info, saveDir ):
     loc_dir = saveDir + '/scoring_errors'
