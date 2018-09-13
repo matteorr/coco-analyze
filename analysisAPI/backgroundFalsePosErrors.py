@@ -87,7 +87,7 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
 
     ar_pic = np.zeros((int(max_height)+1,int(max_width)+1))
     ar_pic_2 = np.zeros((30,30))
-    ar_bins = range(10)+range(10,100,10)+range(100,1000,100)+[1000]
+    ar_bins = list(range(10))+list(range(10,100,10))+list(range(100,1000,100))+[1000]
     ar_pic_3 = np.zeros((10,10))
     ar_bins_3 = [np.power(2,x) for x in range(11)]
 
