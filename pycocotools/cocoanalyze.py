@@ -506,7 +506,7 @@ class COCOanalyze:
                     e = (oks ** 2) / .5 # .5 is a hyperparameter from soft_nms paper
                     new_score = old_score * np.exp(-e)
                     dt['opt_score'] = new_score
-                    #print old_score, oks, new_score
+                    # print(old_score, oks, new_score)
         return _soft_nms_dts
 
     def _correct_dt_scores(self, areaRngLbl):
@@ -917,7 +917,7 @@ class COCOanalyze:
                         break
 
     def __str__(self):
-        print self.stats
+        print(self.stats)
 
 class Params:
     # Params for coco analyze api

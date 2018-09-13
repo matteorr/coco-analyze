@@ -111,8 +111,8 @@ def backgroundFalsePosErrors( coco_analyze, imgs_info, saveDir ):
             row = [i for i in xrange(len(ar_bins_3)-1) if ar_bins_3[i]<t_height<ar_bins_3[i+1]]
             ar_pic_3[row,col] += 1
         else:
-            print "False Positive bbox has a side larger than 1024 pixels."
-            print "Change lists ar_bins_2 and ar_bins_3 to include larger bins."
+            print("False Positive bbox has a side larger than 1024 pixels.")
+            print("Change lists ar_bins_2 and ar_bins_3 to include larger bins.")
             assert(False)
 
         area = t_width * t_height * .5
