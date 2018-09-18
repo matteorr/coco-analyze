@@ -353,7 +353,7 @@ class COCOeval:
             ious_mod = ious[:,:gtNotIgnore]
 
             max_oks     = np.amax(ious_mod, axis=1)
-            dt_inds_max = [i for i in xrange(len(dt))]
+            dt_inds_max = [i for i in range(len(dt))]
             gt_inds_max = np.argmax(ious_mod, axis=1).tolist()
             for i, (dtind,gtind) in enumerate(zip(dt_inds_max,gt_inds_max)):
                 dt_m_max[dtind]      = gt[gtind]['id']

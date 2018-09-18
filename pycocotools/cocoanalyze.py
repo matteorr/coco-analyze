@@ -2,7 +2,7 @@ __author__  = 'mrr'
 __version__ = '2.0'
 
 import numpy as np; import time; import copy
-from cocoeval import COCOeval
+from .cocoeval import COCOeval
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 plt.rcParams['xtick.labelsize'] = 16
@@ -506,7 +506,7 @@ class COCOanalyze:
                     e = (oks ** 2) / .5 # .5 is a hyperparameter from soft_nms paper
                     new_score = old_score * np.exp(-e)
                     dt['opt_score'] = new_score
-                    #print old_score, oks, new_score
+                    # print(old_score, oks, new_score)
         return _soft_nms_dts
 
     def _correct_dt_scores(self, areaRngLbl):
@@ -669,7 +669,7 @@ class COCOanalyze:
         oksThrs = sorted(self.params.oksThrs)
         self.cocoEval.params.maxDets = self.params.maxDets
         self.cocoEval.params.iouThrs = oksThrs
-        indx_list = [i for i in xrange(self.params.num_kpts*3) if (i-2)%3 != 0]
+        indx_list = [i for i in range(self.params.num_kpts*3) if (i-2)%3 != 0]
         err_types = self.params.err_types
         assert(len(err_types)>0)
         T = len(oksThrs); E = len(self.params.err_types)
@@ -868,7 +868,7 @@ class COCOanalyze:
                         fig=plt.figure(figsize=(10,8))
                         ax = fig.add_axes([0.1, 0.15, 0.56, 0.7])
                         plt.title('oksThrs:[{}], areaRng:[{}], maxDets:[{}]'.format(t,a,m),fontsize=18)
-                        thresh_idx = [tind + i * len(iouThrs) for i in xrange(len(labels))]
+                        thresh_idx = [tind + i * len(iouThrs) for i in range(len(labels))]
                         oks_ps_mat = ps_mat[thresh_idx,:,:,:,:]
 
                     for lind, l in enumerate(labels):
@@ -917,7 +917,7 @@ class COCOanalyze:
                         break
 
     def __str__(self):
-        print self.stats
+        print(self.stats)
 
 class Params:
     # Params for coco analyze api
@@ -935,7 +935,7 @@ class Params:
              u'right_wrist', u'left_wrist', u'right_hip', u'left_hip',
              u'right_knee', u'left_knee', u'right_ankle', u'left_ankle']
         self.num_kpts = len(self.kpts_name)
-        self.inv_idx  = [self.inv_kpts_name.index(self.kpts_name[i]) for i in xrange(self.num_kpts)]
+        self.inv_idx  = [self.inv_kpts_name.index(self.kpts_name[i]) for i in range(self.num_kpts)]
         self.sigmas   = np.array([.026,.025,.025, .035,.035, .079,.079, .072,.072,
                                      .062,.062, .107,.107, .087,.087, .089,.089])
         self.oksThrs  = np.array([.5 ,.55, .6, .65, .7, .75, .8, .85, .9, .95])

@@ -2,7 +2,9 @@
 import os, time
 import numpy as np
 import matplotlib.pyplot as plt
-import utilities
+
+# package imports 
+from . import utilities
 
 def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
     loc_dir = saveDir + '/benchmarks_sensitivity/occlusion_crowding'
@@ -103,8 +105,8 @@ def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
     ax.set_aspect(1)
     res = ax.imshow(benchmark_mat, cmap=plt.cm.Greens, interpolation='nearest')
     width, height = benchmark_mat.shape
-    for x in xrange(width):
-        for y in xrange(height):
+    for x in range(width):
+        for y in range(height):
             ax.annotate(str(int(benchmark_mat[x,y])), xy=(y, x),
                         horizontalalignment='center',
                         verticalalignment='center',fontsize=20)
@@ -167,8 +169,8 @@ def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
     res = ax.imshow(total_keypoints, cmap=plt.cm.Blues, interpolation='nearest')
 
     width, height = total_keypoints.shape
-    for x in xrange(width):
-        for y in xrange(height):
+    for x in range(width):
+        for y in range(height):
             ax.annotate(str(int(total_keypoints[x,y])), xy=(y, x),
                         horizontalalignment='center',
                         verticalalignment='center',fontsize=20)
@@ -191,8 +193,8 @@ def occlusionAndCrowdingSensitivity( coco_analyze, oks, saveDir ):
         res = ax.imshow(err_mat[e]/total_keypoints, cmap=cmaps[eind], interpolation='nearest')
 
         width, height = err_mat[e].shape
-        for x in xrange(width):
-            for y in xrange(height):
+        for x in range(width):
+            for y in range(height):
                 ax.annotate("%.1f"%(100*err_mat[e][x,y]/float(total_keypoints[x,y])), xy=(y, x),
                             horizontalalignment='center',
                             verticalalignment='center',fontsize=20)

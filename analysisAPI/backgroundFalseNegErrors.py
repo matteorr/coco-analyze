@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
 from scipy.misc import imresize
 import skimage.io as io
-import utilities
+
+# package imports 
+from . import utilities
 
 def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
     loc_dir = saveDir + '/background_errors/false_negatives'
@@ -62,9 +64,9 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
 
     ar_pic = np.zeros((int(max_height)+1,int(max_width)+1))
     ar_pic_2 = np.zeros((30,30))
-    ar_bins = range(10)+range(10,100,10)+range(100,1000,100)+[1000]
+    ar_bins = list(range(10))+list(range(10,100,10))+list(range(100,1000,100))+[1000]
     ar_pic_3 = np.zeros((10,10))
-    ar_bins_3 = [np.power(2,x) for x in xrange(11)]
+    ar_bins_3 = [np.power(2,x) for x in range(11)]
 
     num_fn_keypoints = {}
 
@@ -89,16 +91,16 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
         b_height = int(b['bbox'][3])
         ar_pic[0:b_height,0:b_width] += 1
         if b_width < 1024 and b_height < 1024:
-            col = [i for i in xrange(len(ar_bins)-1) if ar_bins[i]<b_width<ar_bins[i+1]]
-            row = [i for i in xrange(len(ar_bins)-1) if ar_bins[i]<b_height<ar_bins[i+1]]
+            col = [i for i in range(len(ar_bins)-1) if ar_bins[i]<b_width<ar_bins[i+1]]
+            row = [i for i in range(len(ar_bins)-1) if ar_bins[i]<b_height<ar_bins[i+1]]
             ar_pic_2[row,col] += 1
 
-            col = [i for i in xrange(len(ar_bins_3)-1) if ar_bins_3[i]<b_width<ar_bins_3[i+1]]
-            row = [i for i in xrange(len(ar_bins_3)-1) if ar_bins_3[i]<b_height<ar_bins_3[i+1]]
+            col = [i for i in range(len(ar_bins_3)-1) if ar_bins_3[i]<b_width<ar_bins_3[i+1]]
+            row = [i for i in range(len(ar_bins_3)-1) if ar_bins_3[i]<b_height<ar_bins_3[i+1]]
             ar_pic_3[row,col] += 1
         else:
-            print "False Positive bbox has a side larger than 1024 pixels."
-            print "Change lists ar_bins_2 and ar_bins_3 to include larger bins."
+            print("False Positive bbox has a side larger than 1024 pixels.")
+            print("Change lists ar_bins_2 and ar_bins_3 to include larger bins.")
             assert(False)
 
         area = b_width * b_height * .5
@@ -186,8 +188,8 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     plt.imshow(ar_pic_2,origin='lower')
-    plt.xticks(xrange(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins],rotation='vertical')
-    plt.yticks(xrange(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins])
+    plt.xticks(range(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins],rotation='vertical')
+    plt.yticks(range(1,len(ar_bins)+1),["%d"%(x) for x in ar_bins])
     plt.colorbar()
     plt.grid()
     plt.title('BBox Aspect Ratio',fontsize=20)
@@ -213,8 +215,8 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_facecolor('lightgray')
-    plt.bar(xrange(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
-    plt.xticks(xrange(5),areaRngLbls)
+    plt.bar(range(5),[small,medium,large,xlarge,xxlarge],color='g',align='center')
+    plt.xticks(range(5),areaRngLbls)
     plt.grid()
     plt.title('Histogram of Area Size',fontsize=20)
     path = "%s/bckd_false_neg_bbox_area_hist.pdf"%(loc_dir)
@@ -224,8 +226,8 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
 
     fig, ax = plt.subplots(figsize=(10,10))
     ax.set_facecolor('lightgray')
-    plt.bar(xrange(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
-    plt.xticks(xrange(5),num_people_labels)
+    plt.bar(range(5),[no_people,one,small_grp,large_grp,crowd],color='g',align='center')
+    plt.xticks(range(5),num_people_labels)
     plt.grid()
     plt.title('Histogram of Num. of People in Images',fontsize=20)
     path = "%s/bckd_false_neg_num_people_histogram.pdf"%(loc_dir)
