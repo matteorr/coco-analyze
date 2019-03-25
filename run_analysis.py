@@ -45,7 +45,7 @@ def main():
     versionName = sys.argv[5]
 
     ## create dictionary with all images info
-    gt_data   = json.load(open(annFile,'rb'))
+    gt_data   = json.load(open(annFile,'r'))
     imgs_info = {i['id']:{'id'      :i['id'] ,
                           'width'   :i['width'],
                           'height'  :i['height'],
@@ -53,7 +53,7 @@ def main():
                  for i in gt_data['images']}
 
     ## load team detections
-    dt_data  = json.load(open(resFile,'rb'))
+    dt_data  = json.load(open(resFile,'r'))
     team_dts = {}
     for d in dt_data:
         if d['image_id'] in team_dts: team_dts[d['image_id']].append(d)
