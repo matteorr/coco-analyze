@@ -3,7 +3,6 @@ import os, time
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
-from scipy.misc import imresize
 import skimage.io as io
 
 # package imports 
