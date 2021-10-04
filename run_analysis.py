@@ -1,5 +1,5 @@
 ## general imports
-import os, sys, json, datetime, jinja2
+import os, shutil, sys, json, datetime, jinja2
 from jinja2 import Template
 
 ## COCO imports
@@ -124,6 +124,7 @@ def main():
     output_report = open("{}/{}_performance_report.tex".format(saveDir, teamName), 'w')
     output_report.write( template.render(template_vars) )
     output_report.close()
+    shutil.copyfile(filepath + 'latex/color_coding.pdf', os.path.join(saveDir, 'color_coding.pdf'))
 
 if __name__ == '__main__':
     main()

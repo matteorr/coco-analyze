@@ -81,7 +81,8 @@ def localizationErrors( coco_analyze, imgs_info, saveDir ):
     plt.close()
 
     fig = plt.figure(figsize=(15,15)); plt.axis('off')
-    I = io.imread('./latex/manikin.jpg')
+    filepath = os.path.dirname(os.path.realpath(__file__)) + "/"
+    I = io.imread(filepath + '../latex/manikin.jpg')
     plt.imshow(I); ax = plt.gca(); ax.set_autoscale_on(False)
 
     rects_d = {}
