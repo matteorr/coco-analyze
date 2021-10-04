@@ -119,7 +119,7 @@ def main():
     paths = sizeSensitivity( coco_analyze, .75, saveDir )
     template_vars.update(paths)
 
-    output_report = open('./%s_performance_report.tex'%teamName, 'w')
+    output_report = open("{}/{}_performance_report.tex".format(saveDir, teamName), 'w')
     output_report.write( template.render(template_vars) )
     output_report.close()
 
