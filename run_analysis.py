@@ -19,6 +19,7 @@ def main():
     if len(sys.argv) != 6:
         raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [detections_path] [save_dir] [team_name] [version_name]")
 
+    filepath = os.path.dirname(os.path.realpath(__file__)) + "/"
     latex_jinja_env = jinja2.Environment(
         block_start_string    = '\BLOCK{',
         block_end_string      = '}',
@@ -30,7 +31,7 @@ def main():
         line_comment_prefix   = '%#',
         trim_blocks           = True,
         autoescape            = False,
-        loader                = jinja2.FileSystemLoader(os.path.abspath('./latex/'))
+        loader                = jinja2.FileSystemLoader(filepath + 'latex/')
     )
     template = latex_jinja_env.get_template('report_template.tex')
     template_vars  = {}
