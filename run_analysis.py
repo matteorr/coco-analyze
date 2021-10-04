@@ -78,6 +78,7 @@ def main():
 
     ## initialize COCO analyze api
     coco_analyze = COCOanalyze(coco_gt, coco_dt, 'keypoints')
+    coco_analyze.params.areaRng = [[0 ** 2, 1e5 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
     if teamName == 'fakekeypoints100':
         imgIds  = sorted(coco_gt.getImgIds())[0:100]
         coco_analyze.cocoEval.params.imgIds = imgIds
