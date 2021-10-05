@@ -1,3 +1,4 @@
 colour
 numpy
 matplotlib
+opencv-python

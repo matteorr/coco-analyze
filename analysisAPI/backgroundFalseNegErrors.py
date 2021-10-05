@@ -1,9 +1,9 @@
 ## imports
 import os, time
+import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.path as mplPath
-from scipy.misc import imresize
 import skimage.io as io
 
 # package imports 
@@ -146,7 +146,7 @@ def backgroundFalseNegErrors( coco_analyze, imgs_info, saveDir ):
             grid = grid.reshape((ny,nx))
 
             the_mask += np.array(grid, dtype=int)
-        segm_heatmap += imresize(the_mask,(128,128))
+        segm_heatmap += cv2.resize(the_mask,(128,128))
 
     fig = plt.figure(figsize=(10,10))
     ax = plt.subplot(111)

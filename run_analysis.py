@@ -1,5 +1,5 @@
 ## general imports
-import os, sys, json, datetime, jinja2
+import os, shutil, sys, json, datetime, jinja2
 from jinja2 import Template
 
 ## COCO imports
@@ -19,6 +19,7 @@ def main():
     if len(sys.argv) != 6:
         raise ValueError("Please specify args: $> python run_analysis.py [annotations_path] [detections_path] [save_dir] [team_name] [version_name]")
 
+    filepath = os.path.dirname(os.path.realpath(__file__)) + "/"
     latex_jinja_env = jinja2.Environment(
         block_start_string    = '\BLOCK{',
         block_end_string      = '}',
@@ -30,7 +31,7 @@ def main():
         line_comment_prefix   = '%#',
         trim_blocks           = True,
         autoescape            = False,
-        loader                = jinja2.FileSystemLoader(os.path.abspath('./latex/'))
+        loader                = jinja2.FileSystemLoader(filepath + 'latex/')
     )
     template = latex_jinja_env.get_template('report_template.tex')
     template_vars  = {}
@@ -78,6 +79,7 @@ def main():
 
     ## initialize COCO analyze api
     coco_analyze = COCOanalyze(coco_gt, coco_dt, 'keypoints')
+    coco_analyze.params.areaRng = [[0 ** 2, 1e5 ** 2], [32 ** 2, 96 ** 2], [96 ** 2, 1e5 ** 2]]
     if teamName == 'fakekeypoints100':
         imgIds  = sorted(coco_gt.getImgIds())[0:100]
         coco_analyze.cocoEval.params.imgIds = imgIds
@@ -119,9 +121,10 @@ def main():
     paths = sizeSensitivity( coco_analyze, .75, saveDir )
     template_vars.update(paths)
 
-    output_report = open('./%s_performance_report.tex'%teamName, 'w')
+    output_report = open("{}/{}_performance_report.tex".format(saveDir, teamName), 'w')
     output_report.write( template.render(template_vars) )
     output_report.close()
+    shutil.copyfile(filepath + 'latex/color_coding.pdf', os.path.join(saveDir, 'color_coding.pdf'))
 
 if __name__ == '__main__':
     main()
